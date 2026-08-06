@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>GOLD RADAR X20 - D3.js 3D Visualizer</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0B0D13;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #chart-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* HUD Overlay styling */
+        #hud-container {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-width: 200px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .hud-card {
+            background: rgba(15, 18, 25, 0.88);
+            border: 1px solid rgba(0, 229, 255, 0.25);
+            border-radius: 12px;
+            padding: 10px 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(0, 229, 255, 0.08);
+            backdrop-filter: blur(8px);
+            transition: all 0.25s ease;
+        }
+
+        .hud-card:hover {
+            border-color: rgba(0, 229, 255, 0.5);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), inset 0 0 12px rgba(0, 229, 255, 0.15);
+        }
+
+        .hud-header-row {
+            pointer-events: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            background: rgba(0, 229, 255, 0.12);
+            border: 1px solid rgba(0, 229, 255, 0.3);
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: bold;
+            color: #00E5FF;
+            text-shadow: 0 0 6px rgba(0, 229, 255, 0.4);
+            direction: rtl;
+        }
+
+        .hud-close-btn {
+            background: none;
+            border: none;
+            color: #EF4444;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 0 4px;
+            transition: transform 0.2s ease;
+            display: flex;
+            align-items: center;
+        }
+
+        .hud-close-btn:hover {
+            transform: scale(1.2);
+            color: #F87171;
+        }
+
+        .floating-restore-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 10;
+            pointer-events: auto;
+            background: rgba(15, 18, 25, 0.88);
+            border: 1px solid rgba(0, 229, 255, 0.4);
+            border-radius: 20px;
+            padding: 8px 16px;
+            color: #00E5FF;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 8px rgba(0, 229, 255, 0.3);
+            backdrop-filter: blur(8px);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            direction: rtl;
+        }
+
+        .floating-restore-btn:hover {
+            transform: translateY(-1px);
+            border-color: #00E5FF;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8), 0 0 12px rgba(0, 229, 255, 0.5);
+            color: #fff;
+        }
+
+        .hud-title {
+            color: #88A2B9;
+            font-size: 9px;
+            font-weight: 500;
+            margin-bottom: 3px;
+            letter-spacing: 0.5px;
+            text-align: right;
+        }
+
+        .hud-value {
+            color: #E2F1FF;
+            font-size: 15px;
+            font-weight: bold;
+            display: flex;
+            align-items: baseline;
+            gap: 3px;
+            text-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+            direction: ltr;
+            justify-content: flex-end;
+        }
+
+        .hud-value-unit {
+            font-size: 9px;
+            color: rgba(0, 229, 255, 0.7);
+        }
+
+        /* Help Info Overlay */
+        #help-overlay {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background: rgba(15, 18, 25, 0.8);
+            border: 1px solid rgba(0, 229, 255, 0.15);
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 10px;
+            color: #88A2B9;
+            pointer-events: none;
+            text-align: center;
+            backdrop-filter: blur(2px);
+            white-space: nowrap;
+        }
+
+        /* Loading Spinner */
+        #loader {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(0, 229, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: #00E5FF;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loader-text {
+            color: #00E5FF;
+            font-size: 11px;
+            letter-spacing: 1px;
+            font-weight: bold;
+        }
+
+        /* Toggle Switches */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 38px;
+            height: 20px;
+        }
+
+        .switch input { 
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #242A38;
+            transition: .3s;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 12px;
+            width: 12px;
+            left: 3px;
+            bottom: 3px;
+            background-color: #88A2B9;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: rgba(0, 229, 255, 0.15);
+            border-color: #00E5FF;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(18px);
+            background-color: #00E5FF;
+            box-shadow: 0 0 8px #00E5FF;
+        }
+
+        /* Floating D3 Compass Container */
+        #compass-container {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            width: 80px;
+            height: 80px;
+            z-index: 15;
+            pointer-events: none;
+            background: rgba(15, 18, 25, 0.6);
+            border: 1.5px solid rgba(0, 229, 255, 0.3);
+            border-radius: 50%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), inset 0 0 8px rgba(0, 229, 255, 0.1);
+            backdrop-filter: blur(4px);
+        }
+    </style>
+
+    <!-- Import D3.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+</head>
+<body>
+
+    <div id="loader">
+        <div class="spinner"></div>
+        <div class="loader-text">بارگذاری موتور گرافیکی D3.js...</div>
+    </div>
+
+    <!-- D3 Chart Canvas Container -->
+    <div id="chart-container">
+        <svg id="d3-svg" style="width: 100%; height: 100%; display: block;"></svg>
+    </div>
+
+    <!-- D3 Floating Compass Container -->
+    <div id="compass-container">
+        <svg id="compass-svg" style="width: 100%; height: 100%;"></svg>
+    </div>
+
+    <button id="hud-restore-btn" class="floating-restore-btn" onclick="toggleHudVisibility(true)" style="display: none;">
+        <span>👁️ نمایش ابزارها و فیلترها</span>
+    </button>
+
+    <div id="hud-container">
+        <!-- Closeable Header Panel -->
+        <div class="hud-header-row" style="pointer-events: auto;">
+            <span>🎛️ موتور رندر D3.js</span>
+            <button class="hud-close-btn" onclick="toggleHudVisibility(false)">×</button>
+        </div>
+
+        <div class="hud-card" id="hud-node" style="display: none;">
+            <div class="hud-title">نقطه انتخابی (Node Coords)</div>
+            <div class="hud-value" id="val-coords">C: 0, R: 0</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-title">عمق هدف (Estimated Depth)</div>
+            <div class="hud-value">
+                <span id="val-depth">0.00</span>
+                <span class="hud-value-unit">m</span>
+            </div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-title">قدرت سیگنال (Signal Power)</div>
+            <div class="hud-value">
+                <span id="val-signal">0</span>
+                <span class="hud-value-unit">%</span>
+            </div>
+        </div>
+        <div class="hud-card" style="pointer-events: auto; display: flex; flex-direction: column; gap: 6px;">
+            <div class="hud-title">فیلتر نویز هموارساز (Smoothing Filter)</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; direction: ltr;">
+                <label class="switch">
+                    <input type="checkbox" id="btn-toggle-smooth" onchange="toggleSmoothing()">
+                    <span class="slider"></span>
+                </label>
+                <span id="label-smooth" style="color: #88A2B9; font-size: 11px; font-weight: bold;">غیرفعال</span>
+            </div>
+        </div>
+        <div class="hud-card" style="pointer-events: auto; display: flex; flex-direction: column; gap: 6px;">
+            <div class="hud-title">حالت نمایش شبکه (Wireframe Mode)</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; direction: ltr;">
+                <label class="switch">
+                    <input type="checkbox" id="btn-toggle-wireframe" onchange="toggleWireframe()">
+                    <span class="slider"></span>
+                </label>
+                <span id="label-wireframe" style="color: #88A2B9; font-size: 11px; font-weight: bold;">غیرفعال</span>
+            </div>
+        </div>
+        <div class="hud-card" style="pointer-events: auto; display: flex; flex-direction: column; gap: 6px;">
+            <div class="hud-title">تحلیل ۳ رنگ (RGB Mode)</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; direction: ltr;">
+                <label class="switch">
+                    <input type="checkbox" id="btn-toggle-rgb" onchange="toggleRgbAnalysis()">
+                    <span class="slider"></span>
+                </label>
+                <span id="label-rgb" style="color: #88A2B9; font-size: 11px; font-weight: bold;">غیرفعال</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="help-overlay">
+        چرخش با کشیدن انگشت | زوم با دو انگشت (پینچ) یا اسکرول | انتخاب با ضربه روی نقاط
+    </div>
+
+    <script>
+        // Variables for 3D state
+        let gridWidth = 0, gridLength = 0, gridData = [];
+        let zScaleMultiplier = 1.0;
+        let yaw = 0.6;   // rotation around Y
+        let pitch = 0.55; // rotation around X
+        let zoom = 1.0;
+        let panX = 0;
+        let panY = 0;
+
+        let selectedNodeIndex = null;
+        let isSmoothingEnabled = false;
+        let isRgbAnalysisEnabled = false;
+        let currentRenderStyle = "Solid"; // "Solid", "Wireframe"
+
+        // Dimensions of SVGs
+        let width = window.innerWidth;
+        let height = window.innerHeight;
+
+        // Color definitions
+        const colors = {
+            cyberGold: "#FFD700",
+            cyberCyan: "#00E5FF",
+            cyberRed: "#EF5350",
+            cyberBlue: "#2196F3",
+            cyberGreen: "#4CAF50",
+            voidColor: "#7E57C2",
+            graySoil: "#3E444D",
+            wireframe: "rgba(0, 229, 255, 0.35)",
+            wireframeOnly: "rgba(0, 229, 255, 0.7)"
+        };
+
+        // D3 Selection of canvas SVG
+        const svg = d3.select("#d3-svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        // Add container groups to SVG to keep drawing layers organized
+        const gridGroup = svg.append("g").attr("id", "grid-group");
+        const sweepGroup = svg.append("g").attr("id", "sweep-group");
+        const nodeGroup = svg.append("g").attr("id", "node-group");
+        const uiGroup = svg.append("g").attr("id", "ui-group");
+
+        // Real-time animation sweep variable
+        let sweepX = -10;
+        let sweepDirection = 1;
+
+        // Custom 3D Projection Logic (Perspective projection)
+        function project(x, y, z) {
+            // 1. Rotate around Y-axis (Yaw)
+            const x1 = x * Math.cos(yaw) - z * Math.sin(yaw);
+            const z1 = x * Math.sin(yaw) + z * Math.cos(yaw);
+
+            // 2. Rotate around X-axis (Pitch)
+            const y2 = y * Math.cos(pitch) - z1 * Math.sin(pitch);
+            const z2 = y * Math.sin(pitch) + z1 * Math.cos(pitch);
+
+            // 3. Perspective factor
+            const distance = 40; // Viewer distance
+            const factor = (zoom * Math.min(width, height) * 0.7) / (distance + z2);
+            
+            const px = width / 2 + x1 * factor + panX;
+            const py = height / 2 - y2 * factor + panY;
+            
+            return { x: px, y: py, depth: z2, original: { x, y, z } };
+        }
+
+        // Get smoothed values if smoothing enabled
+        function getSmoothedData() {
+            if (!isSmoothingEnabled || gridData.length === 0) {
+                return gridData;
+            }
+
+            const smoothed = new Array(gridData.length);
+            for (let z = 0; z < gridLength; z++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    const idx = z * gridWidth + x;
+                    let sum = 0;
+                    let count = 0;
+
+                    for (let dz = -1; dz <= 1; dz++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            const nz = z + dz;
+                            const nx = x + dx;
+
+                            if (nz >= 0 && nz < gridLength && nx >= 0 && nx < gridWidth) {
+                                const nIdx = nz * gridWidth + nx;
+                                const weight = (dz === 0 && dx === 0) ? 4 : ((dz === 0 || dx === 0) ? 2 : 1);
+                                sum += gridData[nIdx] * weight;
+                                count += weight;
+                            }
+                        }
+                    }
+                    smoothed[idx] = sum / count;
+                }
+            }
+            return smoothed;
+        }
+
+        // D3 Drag behaviour for rotating
+        const dragBehavior = d3.drag()
+            .on("drag", (event) => {
+                yaw += event.dx * 0.006;
+                pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch - event.dy * 0.006));
+                draw();
+                drawCompass();
+            });
+        svg.call(dragBehavior);
+
+        // D3 Zoom behaviour
+        const zoomBehavior = d3.zoom()
+            .scaleExtent([0.3, 4.0])
+            .on("zoom", (event) => {
+                zoom = event.transform.k;
+                panX = event.transform.x / 4; // dampen the pan
+                panY = event.transform.y / 4;
+                draw();
+            });
+        svg.call(zoomBehavior);
+
+        let currentPalette = "Thermal"; // default palette: "Thermal", options: "Thermal", "Classic", "Grayscale", "Contrast"
+
+        function interpolateHex(color1, color2, factor) {
+            const r1 = (color1 >> 16) & 255;
+            const g1 = (color1 >> 8) & 255;
+            const b1 = color1 & 255;
+            
+            const r2 = (color2 >> 16) & 255;
+            const g2 = (color2 >> 8) & 255;
+            const b2 = color2 & 255;
+            
+            const r = Math.round(r1 + factor * (r2 - r1));
+            const g = Math.round(g1 + factor * (g2 - g1));
+            const b = Math.round(b1 + factor * (b2 - b1));
+            
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
+        function getColorForValue(val, palette) {
+            if (isRgbAnalysisEnabled) {
+                if (val > 120) return colors.cyberRed;     // Red: Metal
+                if (val < -120) return colors.cyberBlue;   // Blue: Cavity
+                return colors.cyberGreen;                  // Green: Soil
+            }
+
+            // Normal range typically from -250 to +350.
+            const minBound = -250;
+            const maxBound = 350;
+            let norm = (val - minBound) / (maxBound - minBound);
+            norm = Math.max(0, Math.min(1, norm));
+
+            if (palette === "Thermal") {
+                if (norm < 0.2) {
+                    return interpolateHex(0x00008B, 0x00FFFF, norm / 0.2);
+                } else if (norm < 0.45) {
+                    return interpolateHex(0x00FFFF, 0x00FF00, (norm - 0.2) / 0.25);
+                } else if (norm < 0.7) {
+                    return interpolateHex(0x00FF00, 0xFFFF00, (norm - 0.45) / 0.25);
+                } else if (norm < 0.88) {
+                    return interpolateHex(0xFFFF00, 0xFF0000, (norm - 0.7) / 0.18);
+                } else {
+                    return interpolateHex(0xFF0000, 0xFFFFFF, (norm - 0.88) / 0.12);
+                }
+            } else if (palette === "Grayscale") {
+                return interpolateHex(0x000000, 0xFFFFFF, norm);
+            } else if (palette === "IronOxide" || palette === "Copper" || palette === "Mineralized") {
+                if (norm < 0.2) {
+                    return interpolateHex(0x1A0C08, 0x3E2723, norm / 0.2);
+                } else if (norm < 0.4) {
+                    return interpolateHex(0x3E2723, 0x8D6E63, (norm - 0.2) / 0.2);
+                } else if (norm < 0.65) {
+                    return interpolateHex(0x8D6E63, 0xE65100, (norm - 0.4) / 0.25);
+                } else if (norm < 0.85) {
+                    return interpolateHex(0xE65100, 0xFFD700, (norm - 0.65) / 0.2);
+                } else {
+                    return interpolateHex(0xFFD700, 0xFFFFFF, (norm - 0.85) / 0.15);
+                }
+            } else if (palette === "Contrast" || palette === "HighContrast") {
+                if (val > 150) {
+                    const t = Math.min(1, (val - 150) / 200);
+                    return interpolateHex(0xFF00FF, 0xFFD700, t);
+                } else if (val < -100) {
+                    const t = Math.min(1, (Math.abs(val) - 100) / 150);
+                    return interpolateHex(0x00FFFF, 0x1E90FF, t);
+                } else {
+                    const t = (val + 100) / 250;
+                    return interpolateHex(0x111215, 0x33353B, t);
+                }
+            } else {
+                // "Classic"
+                if (val > 300) return colors.cyberGold;
+                if (val > 100) return "#E0E0E0";
+                if (val < -150) return colors.cyberRed;
+                return colors.graySoil;
+            }
+        }
+
+        // Determine node color according to geophysics/metal/density values
+        function getNodeColor(val) {
+            return getColorForValue(val, currentPalette);
+        }
+
+        // Main rendering draw loop using D3.js selection and data bindings
+        function draw() {
+            const activeData = getSmoothedData();
+            if (gridWidth <= 0 || gridLength <= 0 || activeData.length === 0) return;
+
+            // Height scaling factor for D3 projection
+            const heightScale = (currentRenderStyle === "Heatmap") ? 0 : 0.0055 * zScaleMultiplier;
+            const spacingX = 2.0;
+            const spacingZ = 2.0;
+            const sizeX = (gridWidth - 1) * spacingX;
+            const sizeZ = (gridLength - 1) * spacingZ;
+            const startX = -sizeX / 2;
+            const startZ = -sizeZ / 2;
+
+            // 1. Generate 3D Vertices
+            const vertices = [];
+            for (let z = 0; z < gridLength; z++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    const idx = z * gridWidth + x;
+                    const val = activeData[idx];
+                    
+                    const wx = startX + x * spacingX;
+                    const wz = startZ + z * spacingZ;
+                    const wy = val * heightScale; // Height
+                    
+                    // Project to 2D
+                    const proj = project(wx, wy, wz);
+                    proj.index = idx;
+                    proj.col = x;
+                    proj.row = z;
+                    proj.val = val;
+                    proj.color = getNodeColor(val);
+                    
+                    vertices.push(proj);
+                }
+            }
+
+            // 2. Generate 3D Quads (Faces) for Painter's Algorithm
+            const quads = [];
+            for (let z = 0; z < gridLength - 1; z++) {
+                for (let x = 0; x < gridWidth - 1; x++) {
+                    const i00 = z * gridWidth + x;
+                    const i10 = z * gridWidth + (x + 1);
+                    const i11 = (z + 1) * gridWidth + (x + 1);
+                    const i01 = (z + 1) * gridWidth + x;
+
+                    const v00 = vertices[i00];
+                    const v10 = vertices[i10];
+                    const v11 = vertices[i11];
+                    const v01 = vertices[i01];
+
+                    // Average depth of quad for sorting (back to front)
+                    const avgDepth = (v00.depth + v10.depth + v11.depth + v01.depth) / 4;
+                    const avgVal = (v00.val + v10.val + v11.val + v01.val) / 4;
+
+                    quads.push({
+                        id: `q_${x}_${z}`,
+                        points: [v00, v10, v11, v01],
+                        depth: avgDepth,
+                        val: avgVal,
+                        color: getNodeColor(avgVal)
+                    });
+                }
+            }
+
+            // Sort quads Back-To-Front (Painter's Algorithm)
+            quads.sort((a, b) => b.depth - a.depth);
+
+            // 3. DRAW QUADS (GRID FACES) WITH D3
+            const paths = gridGroup.selectAll("path.grid-face")
+                .data((currentRenderStyle === "Solid" || currentRenderStyle === "Heatmap") ? quads : [], d => d.id);
+
+            // Exit
+            paths.exit().remove();
+
+            // Enter & Update
+            paths.enter()
+                .append("path")
+                .attr("class", "grid-face")
+                .merge(paths)
+                .attr("d", d => {
+                    return `M ${d.points[0].x} ${d.points[0].y} ` +
+                           `L ${d.points[1].x} ${d.points[1].y} ` +
+                           `L ${d.points[2].x} ${d.points[2].y} ` +
+                           `L ${d.points[3].x} ${d.points[3].y} Z`;
+                })
+                .attr("fill", d => {
+                    // Transparent look with nice dark blue gradient
+                    if (currentRenderStyle === "Heatmap") {
+                        return d.color === colors.graySoil ? "rgba(26, 42, 58, 0.85)" : d3.color(d.color).copy({opacity: 0.9});
+                    }
+                    return d.color === colors.graySoil ? "rgba(26, 42, 58, 0.5)" : d3.color(d.color).copy({opacity: 0.55});
+                })
+                .attr("stroke", (currentRenderStyle === "Solid" || currentRenderStyle === "Heatmap") ? colors.wireframe : "none")
+                .attr("stroke-width", 0.5);
+
+            // 4. DRAW WIREFRAME LINES (IF WIREFRAME ONLY)
+            const wireframeLinesX = [];
+            const wireframeLinesZ = [];
+            
+            if (currentRenderStyle === "Wireframe") {
+                // Generate wireframe segments
+                for (let z = 0; z < gridLength; z++) {
+                    for (let x = 0; x < gridWidth - 1; x++) {
+                        wireframeLinesX.push({
+                            id: `lx_${x}_${z}`,
+                            p1: vertices[z * gridWidth + x],
+                            p2: vertices[z * gridWidth + x + 1],
+                            depth: (vertices[z * gridWidth + x].depth + vertices[z * gridWidth + x + 1].depth) / 2
+                        });
+                    }
+                }
+                for (let z = 0; z < gridLength - 1; z++) {
+                    for (let x = 0; x < gridWidth; x++) {
+                        wireframeLinesZ.push({
+                            id: `lz_${x}_${z}`,
+                            p1: vertices[z * gridWidth + x],
+                            p2: vertices[(z + 1) * gridWidth + x],
+                            depth: (vertices[z * gridWidth + x].depth + vertices[(z + 1) * gridWidth + x].depth) / 2
+                        });
+                    }
+                }
+            }
+
+            const allLines = [...wireframeLinesX, ...wireframeLinesZ];
+            allLines.sort((a, b) => b.depth - a.depth);
+
+            const lines = gridGroup.selectAll("line.grid-wire")
+                .data(allLines, d => d.id);
+
+            lines.exit().remove();
+
+            lines.enter()
+                .append("line")
+                .attr("class", "grid-wire")
+                .merge(lines)
+                .attr("x1", d => d.p1.x)
+                .attr("y1", d => d.p1.y)
+                .attr("x2", d => d.p2.x)
+                .attr("y2", d => d.p2.y)
+                .attr("stroke", colors.wireframeOnly)
+                .attr("stroke-width", 1.2)
+                .attr("opacity", 0.8);
+
+            // 5. DRAW GROUND PILLARS (Holographic projection columns)
+            // Draw a dashed vertical line from ground level (y=0) to the vertex height
+            const pillars = [];
+            for (let i = 0; i < vertices.length; i++) {
+                const v = vertices[i];
+                if (Math.abs(v.original.y) > 0.05) {
+                    const groundProj = project(v.original.x, 0, v.original.z);
+                    pillars.push({
+                        id: `pil_${v.index}`,
+                        pStart: groundProj,
+                        pEnd: v,
+                        color: v.color,
+                        depth: v.depth
+                    });
+                }
+            }
+            pillars.sort((a, b) => b.depth - a.depth);
+
+            const d3Pillars = gridGroup.selectAll("line.pillar-line")
+                .data(pillars, d => d.id);
+
+            d3Pillars.exit().remove();
+
+            d3Pillars.enter()
+                .append("line")
+                .attr("class", "pillar-line")
+                .merge(d3Pillars)
+                .attr("x1", d => d.pStart.x)
+                .attr("y1", d => d.pStart.y)
+                .attr("x2", d => d.pEnd.x)
+                .attr("y2", d => d.pEnd.y)
+                .attr("stroke", d => d.color)
+                .attr("stroke-width", 1.0)
+                .attr("stroke-dasharray", "3,3")
+                .attr("opacity", 0.6);
+
+            // 6. DRAW GROUND REFERENCE RINGS
+            const rings = vertices.map(v => {
+                const groundProj = project(v.original.x, 0, v.original.z);
+                return {
+                    id: `ring_${v.index}`,
+                    x: groundProj.x,
+                    y: groundProj.y,
+                    color: v.color,
+                    depth: v.depth,
+                    scale: 0.35 * (zoom * Math.min(width, height) * 0.7) / (40 + v.depth)
+                };
+            });
+            rings.sort((a, b) => b.depth - a.depth);
+
+            const d3Rings = gridGroup.selectAll("ellipse.ground-ring")
+                .data(rings, d => d.id);
+
+            d3Rings.exit().remove();
+
+            d3Rings.enter()
+                .append("ellipse")
+                .attr("class", "ground-ring")
+                .merge(d3Rings)
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y)
+                .attr("rx", d => d.scale * 1.5) // perspective oval effect
+                .attr("ry", d => d.scale * 0.7 * Math.sin(pitch))
+                .attr("fill", "none")
+                .attr("stroke", d => d.color)
+                .attr("stroke-width", 0.7)
+                .attr("opacity", 0.3);
+
+            // 7. DRAW VERTICAL NODES (SPHERES/CIRCLES) WITH D3
+            // Sort vertices back-to-front so closer nodes overlay farther ones
+            const sortedVertices = [...vertices].sort((a, b) => b.depth - a.depth);
+
+            const circles = nodeGroup.selectAll("circle.sensor-node")
+                .data(sortedVertices, d => d.index);
+
+            circles.exit().remove();
+
+            circles.enter()
+                .append("circle")
+                .attr("class", "sensor-node")
+                .on("click", (event, d) => {
+                    selectNode(d.index);
+                })
+                .merge(circles)
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y)
+                .attr("r", d => {
+                    // Size depends on perspective distance and selection
+                    const baseRadius = 6.0 * (zoom * Math.min(width, height) * 0.7) / (40 + d.depth);
+                    return d.index === selectedNodeIndex ? baseRadius * 1.5 : baseRadius;
+                })
+                .attr("fill", d => d.color)
+                .attr("stroke", d => d.index === selectedNodeIndex ? colors.cyberGold : "#ffffff")
+                .attr("stroke-width", d => d.index === selectedNodeIndex ? 2.5 : 0.8)
+                .attr("opacity", 0.95)
+                .attr("filter", d => d.index === selectedNodeIndex ? "drop-shadow(0px 0px 8px #FFD700)" : "none");
+
+            // 8. ANIMATED LASER SCANNER PLANE SWEEP (D3 Animated Path)
+            // Move sweep bar from startX to endX
+            const halfX = sizeX / 2;
+            sweepX += sweepDirection * 0.25;
+            if (sweepX > halfX) sweepDirection = -1;
+            if (sweepX < -halfX) sweepDirection = 1;
+
+            const sweepLinePoints = [];
+            for (let z = 0; z < gridLength; z++) {
+                const wz = startZ + z * spacingZ;
+                
+                // Interpolate value at sweepX
+                const xIndex = Math.max(0, Math.min(gridWidth - 2, Math.floor(((sweepX - startX) / spacingX))));
+                const xFrac = ((sweepX - startX) / spacingX) - xIndex;
+                
+                const idx1 = z * gridWidth + xIndex;
+                const idx2 = z * gridWidth + (xIndex + 1);
+                
+                let interpY = 0;
+                if (idx1 < activeData.length && idx2 < activeData.length) {
+                    interpY = (activeData[idx1] * (1 - xFrac) + activeData[idx2] * xFrac) * heightScale;
+                }
+                
+                sweepLinePoints.push(project(sweepX, interpY, wz));
+            }
+
+            let pathGen = d3.line()
+                .x(d => d.x)
+                .y(d => d.y);
+
+            const sweepPath = sweepGroup.selectAll("path.laser-sweep")
+                .data([sweepLinePoints]);
+
+            sweepPath.enter()
+                .append("path")
+                .attr("class", "laser-sweep")
+                .merge(sweepPath)
+                .attr("d", pathGen)
+                .attr("fill", "none")
+                .attr("stroke", colors.cyberCyan)
+                .attr("stroke-width", 2.0)
+                .attr("opacity", 0.75)
+                .attr("filter", "drop-shadow(0px 0px 6px #00E5FF)");
+
+            // 9. UPDATE ACTIVE RETICLE FOR SELECTED NODE
+            if (selectedNodeIndex !== null && selectedNodeIndex < vertices.length) {
+                const targetNode = vertices.find(v => v.index === selectedNodeIndex);
+                if (targetNode) {
+                    const reticleData = [targetNode];
+                    const reticles = uiGroup.selectAll("g.selection-reticle")
+                        .data(reticleData, d => d.index);
+
+                    reticles.exit().remove();
+
+                    const reticleEnter = reticles.enter()
+                        .append("g")
+                        .attr("class", "selection-reticle");
+
+                    reticleEnter.append("circle")
+                        .attr("class", "reticle-outer")
+                        .attr("fill", "none")
+                        .attr("stroke", colors.cyberGold)
+                        .attr("stroke-width", 1.5)
+                        .attr("stroke-dasharray", "4,4");
+
+                    reticleEnter.append("circle")
+                        .attr("class", "reticle-inner")
+                        .attr("fill", "none")
+                        .attr("stroke", colors.cyberGold)
+                        .attr("stroke-width", 1.0);
+
+                    reticleEnter.merge(reticles)
+                        .attr("transform", d => `translate(${d.x}, ${d.y})`)
+                        .select("circle.reticle-outer")
+                        .attr("r", d => 16.0 * (zoom * Math.min(width, height) * 0.7) / (40 + d.depth));
+
+                    reticleEnter.merge(reticles)
+                        .select("circle.reticle-inner")
+                        .attr("r", d => 10.0 * (zoom * Math.min(width, height) * 0.7) / (40 + d.depth));
+                }
+            } else {
+                uiGroup.selectAll("g.selection-reticle").remove();
+            }
+        }
+
+        // Selected Node Action Handler
+        function selectNode(index) {
+            selectedNodeIndex = index;
+            
+            const activeData = getSmoothedData();
+            if (index < activeData.length) {
+                const val = activeData[index];
+                const col = index % gridWidth;
+                const row = Math.floor(index / gridWidth);
+
+                // Update HUD Text UI
+                document.getElementById('hud-node').style.display = 'block';
+                document.getElementById('val-coords').innerText = `ستون ${col + 1}، سطر ${row + 1}`;
+                updateHUD(val);
+
+                // Callback to Android interface
+                if (window.Android && window.Android.onNodeSelected) {
+                    window.Android.onNodeSelected(index);
+                }
+            }
+            draw();
+        }
+
+        // Real-time HUD stats updates
+        function updateHUD(value) {
+            let signalStrength = 0;
+            if (value > 0) {
+                signalStrength = Math.min(100, Math.round(Math.abs(value) / 8.5));
+            } else {
+                signalStrength = Math.min(100, Math.round(Math.abs(value) / 6.5));
+            }
+
+            let depthMeters = 0;
+            if (value > 0) {
+                depthMeters = Math.max(0.5, 20.0 - (Math.abs(value) / 850.0) * 18.0);
+            } else {
+                depthMeters = Math.max(1.0, 20.0 - (Math.abs(value) / 650.0) * 15.0);
+            }
+
+            document.getElementById('val-signal').innerText = signalStrength;
+            document.getElementById('val-depth').innerText = depthMeters.toFixed(2);
+        }
+
+        // EXTERNAL CALLS FROM ANDROID KOTLIN (WebView Synchronization)
+        function loadScanData(widthVal, lengthVal, gridDataJson) {
+            // Hide Loader Spinner on initial data load
+            document.getElementById('loader').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('loader').style.display = 'none';
+            }, 500);
+
+            gridWidth = parseInt(widthVal);
+            gridLength = parseInt(lengthVal);
+            
+            if (gridDataJson && gridDataJson.trim() !== "") {
+                gridData = gridDataJson.split(" ").filter(s => s !== "").map(f => parseFloat(f));
+            } else {
+                gridData = [];
+            }
+
+            selectedNodeIndex = null;
+            document.getElementById('hud-node').style.display = 'none';
+            
+            draw();
+            drawCompass();
+
+            // Set aggregate max value to HUD initially
+            let maxVal = 0;
+            for (let i = 0; i < gridData.length; i++) {
+                if (Math.abs(gridData[i]) > Math.abs(maxVal)) {
+                    maxVal = gridData[i];
+                }
+            }
+            updateHUD(maxVal);
+        }
+
+        function setZScale(scale) {
+            zScaleMultiplier = parseFloat(scale);
+            if (gridData.length > 0) {
+                draw();
+            }
+        }
+
+        function selectNodeNatively(index) {
+            selectedNodeIndex = parseInt(index);
+            selectNode(selectedNodeIndex);
+        }
+
+        function setRenderStyle(style) {
+            currentRenderStyle = style;
+            const toggle = document.getElementById('btn-toggle-wireframe');
+            if (toggle) {
+                toggle.checked = (style === "Wireframe");
+            }
+            const label = document.getElementById('label-wireframe');
+            if (label) {
+                label.innerText = style === "Wireframe" ? "فعال" : "غیرفعال";
+                label.style.color = style === "Wireframe" ? "#00E5FF" : "#88A2B9";
+            }
+            
+            // If heatmap mode, position the camera top-down
+            if (style === "Heatmap") {
+                yaw = 0.0; // Straight top-down look
+                pitch = 1.57; // 90 degrees top down (Pi / 2)
+                zoom = 1.1;
+                panX = 0;
+                panY = 0;
+            } else if (style === "Solid") {
+                yaw = 0.6;
+                pitch = 0.55;
+                zoom = 1.0;
+                panX = 0;
+                panY = 0;
+            }
+            draw();
+            drawCompass();
+        }
+
+        function setRgbAnalysis(enabled) {
+            isRgbAnalysisEnabled = (enabled === true || enabled === "true");
+            const toggle = document.getElementById('btn-toggle-rgb');
+            if (toggle) {
+                toggle.checked = isRgbAnalysisEnabled;
+            }
+            const label = document.getElementById('label-rgb');
+            if (label) {
+                label.innerText = isRgbAnalysisEnabled ? "فعال" : "غیرفعال";
+                label.style.color = isRgbAnalysisEnabled ? "#EF5350" : "#88A2B9";
+            }
+            draw();
+        }
+
+        function setColorPalette(palette) {
+            currentPalette = palette;
+            draw();
+        }
+
+        function resetCamera() {
+            yaw = 0.6;
+            pitch = 0.55;
+            zoom = 1.0;
+            panX = 0;
+            panY = 0;
+            draw();
+            drawCompass();
+        }
+
+        function setCameraPreset(preset) {
+            if (preset === 'Top-Down') {
+                yaw = 0.0;
+                pitch = 1.57;
+                zoom = 1.0;
+                panX = 0;
+                panY = 0;
+            } else if (preset === 'Isometric') {
+                yaw = 0.6;
+                pitch = 0.55;
+                zoom = 1.0;
+                panX = 0;
+                panY = 0;
+            } else if (preset === 'Front Cross-Section') {
+                yaw = 0.0;
+                pitch = 0.0;
+                zoom = 1.0;
+                panX = 0;
+                panY = 0;
+            } else if (preset === 'Side Cross-Section') {
+                yaw = 1.57;
+                pitch = 0.0;
+                zoom = 1.0;
+                panX = 0;
+                panY = 0;
+            }
+            draw();
+            drawCompass();
+        }
+
+        // GUI Toggles
+        function toggleSmoothing() {
+            isSmoothingEnabled = document.getElementById('btn-toggle-smooth').checked;
+            const label = document.getElementById('label-smooth');
+            if (isSmoothingEnabled) {
+                label.innerText = "فعال";
+                label.style.color = "#00E5FF";
+            } else {
+                label.innerText = "غیرفعال";
+                label.style.color = "#88A2B9";
+            }
+            draw();
+        }
+
+        function toggleWireframe() {
+            const isWire = document.getElementById('btn-toggle-wireframe').checked;
+            currentRenderStyle = isWire ? "Wireframe" : "Solid";
+            const label = document.getElementById('label-wireframe');
+            if (label) {
+                label.innerText = isWire ? "فعال" : "غیرفعال";
+                label.style.color = isWire ? "#00E5FF" : "#88A2B9";
+            }
+            draw();
+
+            if (window.Android && window.Android.setRenderStyle) {
+                window.Android.setRenderStyle(currentRenderStyle);
+            }
+        }
+
+        function toggleRgbAnalysis() {
+            isRgbAnalysisEnabled = document.getElementById('btn-toggle-rgb').checked;
+            const label = document.getElementById('label-rgb');
+            if (label) {
+                label.innerText = isRgbAnalysisEnabled ? "فعال" : "غیرفعال";
+                label.style.color = isRgbAnalysisEnabled ? "#EF5350" : "#88A2B9";
+            }
+            draw();
+
+            if (window.Android && window.Android.setRgbAnalysis) {
+                window.Android.setRgbAnalysis(isRgbAnalysisEnabled);
+            }
+        }
+
+        function toggleHudVisibility(show) {
+            const hud = document.getElementById('hud-container');
+            const restoreBtn = document.getElementById('hud-restore-btn');
+            const compass = document.getElementById('compass-container');
+            
+            if (show) {
+                hud.style.display = 'flex';
+                restoreBtn.style.display = 'none';
+                if (compass) compass.style.display = 'block';
+            } else {
+                hud.style.display = 'none';
+                restoreBtn.style.display = 'flex';
+                if (compass) compass.style.display = 'none';
+            }
+        }
+
+        // Elegant D3-drawn Compass Overlay
+        const compassSvg = d3.select("#compass-svg");
+        const compassGroup = compassSvg.append("g").attr("transform", "translate(40, 40)");
+
+        // Add background ring
+        compassGroup.append("circle")
+            .attr("r", 32)
+            .attr("fill", "none")
+            .attr("stroke", "rgba(0, 229, 255, 0.2)")
+            .attr("stroke-width", 2);
+
+        // North arrow
+        const compassNeedleNorth = compassGroup.append("polygon")
+            .attr("points", "0,-28 6,0 -6,0")
+            .attr("fill", "#EF5350")
+            .attr("filter", "drop-shadow(0px 0px 3px rgba(239, 83, 80, 0.5))");
+
+        // South arrow
+        const compassNeedleSouth = compassGroup.append("polygon")
+            .attr("points", "0,28 6,0 -6,0")
+            .attr("fill", "#88A2B9");
+
+        // North text
+        compassGroup.append("text")
+            .attr("x", 0)
+            .attr("y", -30)
+            .attr("text-anchor", "middle")
+            .attr("fill", "#EF5350")
+            .attr("font-size", "7px")
+            .attr("font-weight", "bold")
+            .text("N");
+
+        function drawCompass() {
+            // Rotate the compass group based on current Yaw angle
+            const deg = -yaw * (180 / Math.PI);
+            compassNeedleNorth.attr("transform", `rotate(${deg})`);
+            compassNeedleSouth.attr("transform", `rotate(${deg})`);
+        }
+
+        // Resize handler
+        window.addEventListener("resize", () => {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            svg.attr("width", width).attr("height", height);
+            draw();
+        });
+
+        // Periodic animation loop for the sweep laser plane line
+        d3.interval(() => {
+            draw();
+        }, 40);
+
+        // Initial setup/fallback if loadScanData isn't called quickly
+        window.onload = function() {
+            setTimeout(() => {
+                if (gridWidth === 0) {
+                    loadScanData(8, 10, "150 200 450 -120 40 500 800 -300 -400 50 120 180 50 20 -80 300 450 600 -10 -50 40 10 0 100 -20 200 350 -100 -200 80 150 10 300 450 -50 120 -80 30 -120 80 200 -30 200 -80 0 -50 40 80 -100 -50 300 620 -150 -50 0 -80 -10 30 150 250 -40 20 -10 50 -80 20 10 80 -30 -100 -40 10 20 40 -80 -150 -20 -10 -5 10 15 30");
+                }
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

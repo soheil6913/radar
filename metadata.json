@@ -1,0 +1,6 @@
+{
+  "name": "Gold Radar X20",
+  "description": "Gold Radar X20 - Professional 3D ground scanner, magnetometer, and metal detector application.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
