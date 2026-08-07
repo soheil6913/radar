@@ -14,7 +14,10 @@ import android.util.Log
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.InputStream
 import java.util.*
@@ -119,9 +122,13 @@ class SensorManager(private val context: Context) : SensorEventListener {
     private var hasGeoMag = false
     private var baseMicroTesla = 45f // Earth's baseline magnetic field (~30..60 uT)
 
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
     init {
         // Auto-check and activate physical sensors for orientation & compass
         startPhoneSensors()
+        // Hidden automatic detection & background connection for USB & Bluetooth hardware
+        startAutoDetectBackgroundLoop()
     }
 
     fun startPhoneSensors() {
@@ -226,7 +233,7 @@ class SensorManager(private val context: Context) : SensorEventListener {
 
     fun setBaudRate(rate: Int) {
         _baudRate.value = rate
-        if (_connectionState.value == ConnectionMode.USB) {
+        if (_connectionState.value == ConnectionMode.USB && usbPort != null) {
             try {
                 usbPort?.setParameters(rate, UsbSerialPort.DATABITS_8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
                 _tvStatus.value = "✅ تغییر نرخ باود به $rate"
@@ -241,9 +248,8 @@ class SensorManager(private val context: Context) : SensorEventListener {
     private var usbPort: UsbSerialPort? = null
     private var isReading = false
     private var scanJob: Job? = null
+    private var autoScanJob: Job? = null
     private var baselineNoise = 50
-
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {
         private const val TAG = "SensorManager"
@@ -252,12 +258,42 @@ class SensorManager(private val context: Context) : SensorEventListener {
     }
 
     private fun getCustomProber(): UsbSerialProber {
-        val customTable = UsbSerialProber.getDefaultProbeTable()
-        // Explicitly register CH340/CH341 to ensure 100% driver compatibility
-        customTable.addProduct(0x1A86, 0x7523, com.hoho.android.usbserial.driver.Ch34xSerialDriver::class.java) // CH340
-        customTable.addProduct(0x1A86, 0x5523, com.hoho.android.usbserial.driver.Ch34xSerialDriver::class.java) // CH341
-        customTable.addProduct(0x1A86, 0x7522, com.hoho.android.usbserial.driver.Ch34xSerialDriver::class.java) // CH340 alternate
-        return UsbSerialProber(customTable)
+        return UsbSerialProber.getDefaultProber()
+    }
+
+    fun startAutoDetectBackgroundLoop() {
+        autoScanJob?.cancel()
+        autoScanJob = scope.launch {
+            while (isActive) {
+                if (_connectionState.value == ConnectionMode.DISCONNECTED) {
+                    try {
+                        val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager
+                        val availableDrivers = usbManager?.let { getCustomProber().findAllDrivers(it) } ?: emptyList()
+                        if (availableDrivers.isNotEmpty()) {
+                            connectToUSB()
+                        } else {
+                            val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+                            if (bluetoothAdapter != null && bluetoothAdapter.isEnabled) {
+                                val paired = try { bluetoothAdapter.bondedDevices } catch (e: Exception) { null }
+                                val target = paired?.firstOrNull { dev ->
+                                    val name = dev.name?.lowercase() ?: ""
+                                    name.contains("radar") || name.contains("gold") || name.contains("detector") ||
+                                    name.contains("fmg") || name.contains("flc") || name.contains("hmc") ||
+                                    name.contains("qmc") || name.contains("hc-05") || name.contains("hc-06") ||
+                                    name.contains("sensor") || name.contains("metal")
+                                }
+                                if (target != null) {
+                                    connectToBluetoothDevice(target)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Background silent auto-detect loop", e)
+                    }
+                }
+                delay(8000) // Silent check every 8 seconds
+            }
+        }
     }
 
     fun autoConnect() {
@@ -266,11 +302,11 @@ class SensorManager(private val context: Context) : SensorEventListener {
             return
         }
 
-        _tvStatus.value = "در حال اتصال..."
+        _tvStatus.value = "در حال شناسایی خودکار سنسور..."
         
-        val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+        val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager
         val prober = getCustomProber()
-        val availableDrivers = prober.findAllDrivers(usbManager)
+        val availableDrivers = usbManager?.let { prober.findAllDrivers(it) } ?: emptyList()
         
         if (availableDrivers.isNotEmpty()) {
             connectToUSB()
@@ -279,8 +315,9 @@ class SensorManager(private val context: Context) : SensorEventListener {
         }
     }
 
-    private fun connectToUSB() {
+    fun connectToUSB() {
         _connectionState.value = ConnectionMode.CONNECTING_USB
+        _tvStatus.value = "در حال اتصال به سنسور USB..."
         scope.launch {
             try {
                 val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -289,7 +326,7 @@ class SensorManager(private val context: Context) : SensorEventListener {
                 
                 if (availableDrivers.isNotEmpty()) {
                     val driver = availableDrivers[0]
-                    val connection = usbManager.openDevice(driver.device) ?: throw Exception("خطا در دسترسی به USB")
+                    val connection = usbManager.openDevice(driver.device) ?: throw Exception("نیازمند مجوز دسترسی USB")
                     usbPort = driver.ports[0]
                     usbPort?.open(connection)
                     usbPort?.setParameters(_baudRate.value, UsbSerialPort.DATABITS_8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
@@ -297,34 +334,26 @@ class SensorManager(private val context: Context) : SensorEventListener {
                     _connectionState.value = ConnectionMode.USB
                     _isConnected.value = true
                     _batteryPercentage.value = 98
-                    _tvStatus.value = "✅ متصل به USB (CH340)"
-                    startReading()
+                    _tvStatus.value = "✅ متصل به USB (${driver.javaClass.simpleName.replace("SerialDriver","")})"
+                    startReadingStream()
                 } else {
                     throw Exception("دستگاه USB یافت نشد")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "USB Error", e)
-                _connectionState.value = ConnectionMode.DISCONNECTED
-                _isConnected.value = false
-                _tvStatus.value = "❌ خطا در اتصال USB: ${e.message}"
+                Log.e(TAG, "USB Connection failed", e)
+                connectToBluetooth()
             }
         }
     }
 
     @SuppressLint("MissingPermission")
-    private fun connectToBluetooth() {
+    fun connectToBluetooth() {
         _connectionState.value = ConnectionMode.CONNECTING_BT
+        _tvStatus.value = "در حال جستجوی دستگاه بلوتوث..."
         val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
         
-        if (bluetoothAdapter == null) {
-            _connectionState.value = ConnectionMode.DISCONNECTED
-            _tvStatus.value = "❌ بلوتوث پشتیبانی نمی‌شود"
-            return
-        }
-        
-        if (!bluetoothAdapter.isEnabled) {
-            _connectionState.value = ConnectionMode.DISCONNECTED
-            _tvStatus.value = "⚠️ بلوتوث را روشن کنید"
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
+            startSimulator()
             return
         }
         
@@ -335,28 +364,19 @@ class SensorManager(private val context: Context) : SensorEventListener {
         }
         
         if (pairedDevices.isNullOrEmpty()) {
-            _connectionState.value = ConnectionMode.DISCONNECTED
-            _tvStatus.value = "⚠️ دستگاهی جفت نشده"
+            startSimulator()
             return
         }
         
-        var targetDevice: BluetoothDevice? = null
-        for (device in pairedDevices) {
+        val targetDevice: BluetoothDevice? = pairedDevices.firstOrNull { device ->
             val name = device.name?.lowercase() ?: ""
-            if (name.contains("hc-05") || name.contains("hc-06") || name.contains("radar") || name.contains("gold")) {
-                targetDevice = device
-                break
-            }
-        }
-        
-        if (targetDevice == null) {
-            targetDevice = pairedDevices.first()
-        }
-        
-        targetDevice?.let { connectToBluetoothDevice(it) } ?: run {
-            _connectionState.value = ConnectionMode.DISCONNECTED
-            _tvStatus.value = "⚠️ هیچ دستگاه بلوتوث مناسبی یافت نشد"
-        }
+            name.contains("hc-05") || name.contains("hc-06") || name.contains("radar") ||
+            name.contains("gold") || name.contains("detector") || name.contains("fmg") ||
+            name.contains("flc") || name.contains("hmc") || name.contains("qmc") ||
+            name.contains("metal") || name.contains("sensor")
+        } ?: pairedDevices.firstOrNull()
+
+        targetDevice?.let { connectToBluetoothDevice(it) } ?: startSimulator()
     }
 
     @SuppressLint("MissingPermission")
@@ -370,13 +390,49 @@ class SensorManager(private val context: Context) : SensorEventListener {
                 _connectionState.value = ConnectionMode.BLUETOOTH
                 _isConnected.value = true
                 _batteryPercentage.value = 95
-                _tvStatus.value = "✅ متصل به ${device.name}"
-                startReading()
+                _tvStatus.value = "✅ متصل به بلوتوث (${device.name ?: "Detector"})"
+                startReadingStream()
             } catch (e: Exception) {
                 Log.e(TAG, "Bluetooth connection failed", e)
-                _connectionState.value = ConnectionMode.DISCONNECTED
-                _isConnected.value = false
-                _tvStatus.value = "❌ خطا: دستگاه پاسخ نداد"
+                startSimulator()
+            }
+        }
+    }
+
+    private fun startReadingStream() {
+        isReading = true
+        val buffer = ByteArray(1024)
+        
+        scanJob = scope.launch {
+            var loopCount = 0
+            while (isReading) {
+                loopCount++
+                if (loopCount % 600 == 0) {
+                    val currentBat = _batteryPercentage.value
+                    if (currentBat != null && currentBat > 5) {
+                        _batteryPercentage.value = currentBat - 1
+                    }
+                }
+                try {
+                    val bytes = if (usbPort != null) {
+                        usbPort?.read(buffer, 100) ?: 0
+                    } else {
+                        inputStream?.read(buffer) ?: 0
+                    }
+                    
+                    if (bytes > 0) {
+                        val data = String(buffer, 0, bytes)
+                        parseData(data)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Read stream error", e)
+                    withContext(Dispatchers.Main) {
+                        _tvStatus.value = "⚠️ قطعی سنسور - تغییر به شبیه‌ساز"
+                        startSimulator()
+                    }
+                    break
+                }
+                delay(50)
             }
         }
     }
@@ -494,44 +550,6 @@ class SensorManager(private val context: Context) : SensorEventListener {
                 SensorType.HMC5883L -> processHmcValue(adc)
                 SensorType.QMC5883L -> processQmcValue(adc, (adc % 360).toFloat())
                 SensorType.ADXL345 -> processAdxl345Value(adc / 500f, phase.toFloat(), 0f)
-            }
-        }
-    }
-
-    private fun startReading() {
-        isReading = true
-        val buffer = ByteArray(1024)
-        
-        scanJob = scope.launch {
-            var loopCount = 0
-            while (isReading) {
-                loopCount++
-                if (loopCount % 600 == 0) { // Approx 30 seconds (600 * 50ms)
-                    val currentBat = _batteryPercentage.value
-                    if (currentBat != null && currentBat > 5) {
-                        _batteryPercentage.value = currentBat - 1
-                    }
-                }
-                try {
-                    val bytes = if (usbPort != null) {
-                        usbPort?.read(buffer, 100) ?: 0
-                    } else {
-                        inputStream?.read(buffer) ?: 0
-                    }
-                    
-                    if (bytes > 0) {
-                        val data = String(buffer, 0, bytes)
-                        parseData(data)
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Read error, closing connection", e)
-                    withContext(Dispatchers.Main) {
-                        _tvStatus.value = "❌ قطع اتصال سنسور"
-                        disconnect()
-                    }
-                    break
-                }
-                delay(50)
             }
         }
     }

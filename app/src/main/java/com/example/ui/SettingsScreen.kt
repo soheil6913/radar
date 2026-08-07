@@ -387,10 +387,10 @@ fun SettingsScreen(
             }
         }
 
-        // Section 4: Bluetooth & Serial Device Config
+        // Section 4: Sensor & Simulator Config
         SettingsSectionCard(
-            title = AppTranslations.getString("settings_device_conf", appLanguage),
-            icon = Icons.Default.Bluetooth,
+            title = "تنظیمات سنسور و شبیه‌ساز",
+            icon = Icons.Default.Sensors,
             iconColor = CyberCyan
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -417,7 +417,7 @@ fun SettingsScreen(
                                 .clip(CircleShape)
                                 .background(indicatorColor)
                         )
-                        Text(AppTranslations.getString("settings_bt_connected", appLanguage), color = Color.White, fontSize = 13.sp)
+                        Text("وضعیت سنسور / شبیه‌ساز:", color = Color.White, fontSize = 13.sp)
                     }
 
                     Text(connectionStatus, color = CyberGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -437,12 +437,12 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(
-                        imageVector = if (connectionState != ConnectionMode.DISCONNECTED) Icons.Default.BluetoothDisabled else Icons.Default.BluetoothSearching,
+                        imageVector = if (connectionState != ConnectionMode.DISCONNECTED) Icons.Default.SensorsOff else Icons.Default.Sensors,
                         contentDescription = null
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (connectionState != ConnectionMode.DISCONNECTED) "قطع اتصال سخت‌افزار" else AppTranslations.getString("settings_bt_scan", appLanguage),
+                        text = if (connectionState != ConnectionMode.DISCONNECTED) "غیرفعال‌سازی شبیه‌ساز" else "فعال‌سازی شبیه‌ساز / سنسورها",
                         fontWeight = FontWeight.Bold
                     )
                 }

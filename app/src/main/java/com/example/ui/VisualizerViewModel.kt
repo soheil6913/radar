@@ -76,6 +76,29 @@ class VisualizerViewModel(
         }
     }
 
+    // Auto-stream scan recording state for live USB serial sensors
+    private val _isAutoScanStreaming = MutableStateFlow(false)
+    val isAutoScanStreaming = _isAutoScanStreaming.asStateFlow()
+
+    fun toggleAutoScanStreaming() {
+        _isAutoScanStreaming.value = !_isAutoScanStreaming.value
+    }
+
+    fun setAutoScanStreaming(enabled: Boolean) {
+        _isAutoScanStreaming.value = enabled
+    }
+
+    init {
+        // Automatically record incoming hardware sensor updates if auto-streaming is enabled
+        viewModelScope.launch {
+            sensorManager.adcValue.collect {
+                if (_isScanActive.value && _isAutoScanStreaming.value) {
+                    recordCurrentStep()
+                }
+            }
+        }
+    }
+
     private val prefs = application.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
 
     private val _appLanguage = MutableStateFlow(prefs.getString("app_language", "fa") ?: "fa")

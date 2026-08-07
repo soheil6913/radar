@@ -169,19 +169,6 @@ fun AppDashboard(
                     )
                 )
                 NavigationBarItem(
-                    selected = currentTab == "usb",
-                    onClick = { currentTab = "usb" },
-                    icon = { Icon(Icons.Default.Usb, contentDescription = "USB") },
-                    label = { Text("سنسور USB", fontSize = 9.sp) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = CyberCyan,
-                        selectedTextColor = CyberCyan,
-                        unselectedIconColor = GrayText,
-                        unselectedTextColor = GrayText,
-                        indicatorColor = CardBg
-                    )
-                )
-                NavigationBarItem(
                     selected = currentTab == "settings",
                     onClick = { currentTab = "settings" },
                     icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
@@ -216,7 +203,6 @@ fun AppDashboard(
                     currentTab = "visualizer"
                 })
                 "ai" -> AiAnalysisScreen(viewModel = viewModel)
-                "usb" -> UsbSensorScreen()
                 "settings" -> SettingsScreen(viewModel = viewModel)
             }
 
@@ -271,7 +257,6 @@ fun AppDashboard(
                     RadialMenuItem("tracker", "پایش زنده", Icons.Default.TrendingUp, CyberRed),
                     RadialMenuItem("history", "تاریخچه", Icons.Default.History, CyberGold),
                     RadialMenuItem("ai", "هوش مصنوعی", Icons.Default.AutoAwesome, CyberGold),
-                    RadialMenuItem("usb", "سنسور USB", Icons.Default.Usb, CyberCyan),
                     RadialMenuItem("settings", "تنظیمات", Icons.Default.Settings, CyberCyan)
                 )
             }
@@ -4664,20 +4649,20 @@ fun HardwareStatusPanel(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Bluetooth,
+                        imageVector = Icons.Default.Sensors,
                         contentDescription = "Hardware status",
                         tint = CyberCyan,
                         modifier = Modifier.size(18.dp)
                     )
                     Column {
                         Text(
-                            text = "سخت‌افزار Gold Radar X20",
+                            text = "سنسور و شبیه‌ساز Gold Radar",
                             color = Color.White,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Gold Radar X20 Hardware Monitor",
+                            text = "Gold Radar Sensor Monitor",
                             color = GrayText,
                             fontSize = 10.sp
                         )

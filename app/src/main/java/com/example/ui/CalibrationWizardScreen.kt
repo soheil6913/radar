@@ -609,9 +609,9 @@ fun Step1ProbeSelection(
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(Icons.Default.Usb, contentDescription = null, tint = Color.Black)
+                        Icon(Icons.Default.Sensors, contentDescription = null, tint = Color.Black)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("اتصال USB / بلوتوث", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("فعال‌سازی سنسورها", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Button(

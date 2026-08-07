@@ -56,16 +56,16 @@ fun HexagonParticleSplashScreen(
         coroutineScope.launch {
             rotationAngle.animateTo(
                 targetValue = 360f,
-                animationSpec = tween(durationMillis = 3000, easing = LinearEasing)
+                animationSpec = tween(durationMillis = 1500, easing = LinearEasing)
             )
         }
         animProgress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 2400, easing = FastOutSlowInEasing)
+            animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)
         )
-        delay(300)
+        delay(100)
         isVisible = false
-        delay(400)
+        delay(200)
         onSplashFinished()
     }
 
