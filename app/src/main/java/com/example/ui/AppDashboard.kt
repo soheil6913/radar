@@ -98,90 +98,11 @@ fun AppDashboard(
     } else {
         Scaffold(
         bottomBar = {
-            NavigationBar(
-                containerColor = SurfaceBg,
-                tonalElevation = 8.dp,
-                modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
-            ) {
-                NavigationBarItem(
-                    selected = currentTab == "scan",
-                    onClick = { currentTab = "scan" },
-                    icon = { Icon(Icons.Default.Map, contentDescription = "Scan") },
-                    label = { Text(AppTranslations.getString("nav_scan", appLanguage), fontSize = 9.sp) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = CyberGold,
-                        selectedTextColor = CyberGold,
-                        unselectedIconColor = GrayText,
-                        unselectedTextColor = GrayText,
-                        indicatorColor = CardBg
-                    )
-                )
-                NavigationBarItem(
-                    selected = currentTab == "visualizer",
-                    onClick = { currentTab = "visualizer" },
-                    icon = { Icon(Icons.Default.ViewInAr, contentDescription = "3D") },
-                    label = { Text(AppTranslations.getString("nav_visualizer", appLanguage), fontSize = 9.sp) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = CyberCyan,
-                        selectedTextColor = CyberCyan,
-                        unselectedIconColor = GrayText,
-                        unselectedTextColor = GrayText,
-                        indicatorColor = CardBg
-                    )
-                )
-                NavigationBarItem(
-                    selected = currentTab == "tracker",
-                    onClick = { currentTab = "tracker" },
-                    icon = { Icon(Icons.Default.TrendingUp, contentDescription = "Live") },
-                    label = { Text(AppTranslations.getString("nav_live", appLanguage), fontSize = 9.sp) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = CyberRed,
-                        selectedTextColor = CyberRed,
-                        unselectedIconColor = GrayText,
-                        unselectedTextColor = GrayText,
-                        indicatorColor = CardBg
-                    )
-                )
-                NavigationBarItem(
-                    selected = currentTab == "history",
-                    onClick = { currentTab = "history" },
-                    icon = { Icon(Icons.Default.History, contentDescription = "History") },
-                    label = { Text(AppTranslations.getString("nav_history", appLanguage), fontSize = 9.sp) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = CyberGold,
-                        selectedTextColor = CyberGold,
-                        unselectedIconColor = GrayText,
-                        unselectedTextColor = GrayText,
-                        indicatorColor = CardBg
-                    )
-                )
-                NavigationBarItem(
-                    selected = currentTab == "ai",
-                    onClick = { currentTab = "ai" },
-                    icon = { Icon(Icons.Default.AutoAwesome, contentDescription = "AI") },
-                    label = { Text(AppTranslations.getString("nav_ai", appLanguage), fontSize = 9.sp) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = CyberGold,
-                        selectedTextColor = CyberGold,
-                        unselectedIconColor = GrayText,
-                        unselectedTextColor = GrayText,
-                        indicatorColor = CardBg
-                    )
-                )
-                NavigationBarItem(
-                    selected = currentTab == "settings",
-                    onClick = { currentTab = "settings" },
-                    icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                    label = { Text(AppTranslations.getString("nav_settings", appLanguage), fontSize = 9.sp) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = CyberCyan,
-                        selectedTextColor = CyberCyan,
-                        unselectedIconColor = GrayText,
-                        unselectedTextColor = GrayText,
-                        indicatorColor = CardBg
-                    )
-                )
-            }
+            MagicNavigationBar(
+                currentTab = currentTab,
+                onTabSelected = { currentTab = it },
+                appLanguage = appLanguage
+            )
         },
         containerColor = DarkBg,
         modifier = modifier

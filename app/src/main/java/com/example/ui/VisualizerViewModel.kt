@@ -88,17 +88,6 @@ class VisualizerViewModel(
         _isAutoScanStreaming.value = enabled
     }
 
-    init {
-        // Automatically record incoming hardware sensor updates if auto-streaming is enabled
-        viewModelScope.launch {
-            sensorManager.adcValue.collect {
-                if (_isScanActive.value && _isAutoScanStreaming.value) {
-                    recordCurrentStep()
-                }
-            }
-        }
-    }
-
     private val prefs = application.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
 
     private val _appLanguage = MutableStateFlow(prefs.getString("app_language", "fa") ?: "fa")
@@ -843,6 +832,15 @@ class VisualizerViewModel(
     private var presetCounter = 0
 
     init {
+        // Automatically record incoming hardware sensor updates if auto-streaming is enabled
+        viewModelScope.launch {
+            sensorManager.adcValue.collect {
+                if (_isScanActive.value && _isAutoScanStreaming.value) {
+                    recordCurrentStep()
+                }
+            }
+        }
+
         viewModelScope.launch {
             // Check if database is empty, if so, seed default template scans
             try {
