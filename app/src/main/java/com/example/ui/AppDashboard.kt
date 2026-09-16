@@ -91,12 +91,15 @@ fun AppDashboard(
 
     var showSplash by remember { mutableStateOf(true) }
 
-    if (showSplash) {
-        HexagonParticleSplashScreen(
-            onSplashFinished = { showSplash = false }
-        )
-    } else {
-        Scaffold(
+    val layoutDirection = if (appLanguage == "fa") LayoutDirection.Rtl else LayoutDirection.Ltr
+
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+        if (showSplash) {
+            HexagonParticleSplashScreen(
+                onSplashFinished = { showSplash = false }
+            )
+        } else {
+            Scaffold(
         bottomBar = {
             MagicNavigationBar(
                 currentTab = currentTab,
@@ -191,6 +194,8 @@ fun AppDashboard(
         }
     }
 }
+}
+
 }
 
 // ==========================================
@@ -1382,9 +1387,9 @@ fun VisualizerScreen(viewModel: VisualizerViewModel, onNavigateToAi: () -> Unit 
     var isAllUiHidden by remember { mutableStateOf(false) }
     var selectedSettingsTab by remember { mutableStateOf(0) } // 0: Render & Camera, 1: Filter & Noise, 2: Palette & Layers, 3: Markers & Export
 
-    // Dock Window Management Workspace State
-    var workspaceMode by remember { mutableStateOf("SPLIT") } // "SPLIT" (Viewport + Dock), "GRID" (2x2 Grid), "FULL" (Focus Canvas)
-    var activeRightDockTab by remember { mutableStateOf(0) } // 0: AI Insights, 1: Sensors, 2: Depth, 3: Settings
+    // Sequential Capability Bar & Single Viewport Overlay State (Clean, Uncluttered 3D Scan View)
+    var activeCapabilityPanel by remember { mutableStateOf<Int?>(null) } // null: 100% unobstructed 3D scan, 0: AI, 1: Sensors, 2: Depth, 3: Settings
+    var showTutorialDialog by remember { mutableStateOf(false) }
 
     // Realtime Hardware Sensor State
     val connectionState by viewModel.sensorManager.connectionState.collectAsStateWithLifecycle()
@@ -2191,88 +2196,181 @@ fun VisualizerScreen(viewModel: VisualizerViewModel, onNavigateToAi: () -> Unit 
         }
     }
 
-    // MAIN CONTAINER: Non-Overlapping Window Management Dock System
-    Column(
+    // MAIN CONTAINER: Clean Single-Viewport 3D Ground Scan View with Sequential Capability Bar
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkBg)
     ) {
-        // TOP WORKSPACE HEADER: Non-overlapping Workspace Manager Bar
+        // 1. Fullscreen 3D Viewport Canvas (Primary Focus: 100% Clear Ground Scan Area)
+        ViewportPanelContent(modifier = Modifier.fillMaxSize())
+
+        // 2. Top Sleek Status & Actions Header (Non-Obstructive Floating Overlay)
         if (!isAllUiHidden) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = SurfaceBg),
-                shape = RoundedCornerShape(0.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                modifier = Modifier.fillMaxWidth()
+                colors = CardDefaults.cardColors(containerColor = SurfaceBg.copy(alpha = 0.92f)),
+                shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+                border = BorderStroke(1.dp, CardBg),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Title & Scan Details
+                    // Left: Scan Title & Specifications
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Default.DashboardCustomize, contentDescription = null, tint = CyberGold, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.ViewInAr, contentDescription = null, tint = CyberGold, modifier = Modifier.size(20.dp))
                         Column {
-                            Text("مدیریت پنجره‌ها و تحلیل چندگانه", color = CyberGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            Text("OKM 3D Visualizer Workspace", color = GrayText, fontSize = 9.sp)
+                            Text(currentScan.name, color = CyberGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("شبکه: ${currentScan.width}×${currentScan.length} | خاک: ${currentScan.soilType}", color = GrayText, fontSize = 9.sp)
                         }
                     }
 
-                    // Workspace Mode Switcher (SPLIT, GRID, FULL)
+                    // Right: Quick Action Buttons (Tutorial, Sunlight, Reset, Replay, Save, Markers, Export, UI Toggle)
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val modes = listOf(
-                            "SPLIT" to "📐 دوپنجره‌ای",
-                            "GRID" to "🔲 شبکه‌ای",
-                            "FULL" to "🖥️ بوم"
-                        )
-                        modes.forEach { (modeKey, modeLabel) ->
-                            val isSel = workspaceMode == modeKey
-                            Button(
-                                onClick = { workspaceMode = modeKey },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isSel) CyberGold.copy(alpha = 0.25f) else CardBg,
-                                    contentColor = if (isSel) CyberGold else Color.White
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, if (isSel) CyberGold else Color.Transparent),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.height(30.dp)
+                        // Help Tutorial Button
+                        IconButton(
+                            onClick = { showTutorialDialog = true },
+                            modifier = Modifier.size(32.dp).testTag("help_tutorial_button")
+                        ) {
+                            Icon(Icons.Default.HelpOutline, contentDescription = "Help", tint = CyberCyan, modifier = Modifier.size(16.dp))
+                        }
+
+                        // Outdoor Sunlight High-Contrast Mode Toggle
+                        IconButton(
+                            onClick = { viewModel.toggleOutdoorSunlightMode() },
+                            modifier = Modifier.size(32.dp).testTag("toggle_outdoor_sunlight_mode")
+                        ) {
+                            Icon(
+                                imageVector = if (isOutdoorSunlightMode) Icons.Default.WbSunny else Icons.Default.Brightness2,
+                                contentDescription = "Sunlight Mode",
+                                tint = if (isOutdoorSunlightMode) CyberGold else GrayText,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        // Reset Camera Position
+                        IconButton(
+                            onClick = { viewModel.resetView() },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Reset Camera", tint = Color.White, modifier = Modifier.size(16.dp))
+                        }
+
+                        // Replay Scan Playback
+                        IconButton(
+                            onClick = { viewModel.togglePlaybackMode() },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaybackActive) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
+                                contentDescription = "Replay Scan",
+                                tint = if (isPlaybackActive) CyberGold else CyberCyan,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        // Save Scan
+                        if (currentScan.id < 0 && currentScan.id != -100) {
+                            IconButton(
+                                onClick = {
+                                    scanSaveName = "اسکن زمین ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())}"
+                                    scanSaveNotes = ""
+                                    showSaveDialog = true
+                                },
+                                modifier = Modifier.size(32.dp)
                             ) {
-                                Text(modeLabel, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Icon(Icons.Default.Save, contentDescription = "Save Scan", tint = CyberGold, modifier = Modifier.size(16.dp))
                             }
                         }
-                    }
 
-                    // Action Toolbar Buttons (Save, Marker, Export, Hide HUD)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = { showSaveDialog = true }, modifier = Modifier.size(30.dp)) {
-                            Icon(Icons.Default.Save, contentDescription = "Save Scan", tint = CyberCyan, modifier = Modifier.size(16.dp))
+                        // Add Marker
+                        IconButton(
+                            onClick = {
+                                if (selectedNodeIndex != null) {
+                                    annotationCol = (selectedNodeIndex!! % currentScan.width) + 1
+                                    annotationRow = (selectedNodeIndex!! / currentScan.width) + 1
+                                } else {
+                                    annotationCol = 1
+                                    annotationRow = 1
+                                }
+                                annotationLabel = ""
+                                annotationNote = ""
+                                annotationColor = "#FFD700"
+                                showAddAnnotationDialog = true
+                            },
+                            modifier = Modifier.size(32.dp).testTag("add_annotation_button")
+                        ) {
+                            Icon(Icons.Default.AddLocation, contentDescription = "Add Marker", tint = CyberGold, modifier = Modifier.size(16.dp))
                         }
+
+                        // List Markers
                         IconButton(
                             onClick = { showMarkersListDialog = true },
-                            modifier = Modifier.size(30.dp).testTag("list_annotations_button")
+                            modifier = Modifier.size(32.dp).testTag("list_annotations_button")
                         ) {
-                            Icon(Icons.Default.Place, contentDescription = "Markers List", tint = CyberGold, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Bookmark, contentDescription = "List Markers", tint = CyberCyan, modifier = Modifier.size(16.dp))
                         }
+
+                        // Export Data
+                        Box {
+                            IconButton(
+                                onClick = { showExportMenu = true },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = "Export Data", tint = CyberCyan, modifier = Modifier.size(16.dp))
+                            }
+
+                            DropdownMenu(
+                                expanded = showExportMenu,
+                                onDismissRequest = { showExportMenu = false },
+                                modifier = Modifier.background(CardBg)
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("📤 اشتراک‌گذاری گزارش متنی (پیام‌رسان‌ها)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                    onClick = {
+                                        showExportMenu = false
+                                        currentScan?.let { shareScanRecord(context, it, "summary") }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("📊 اشتراک‌گذاری فایل CSV (Surfer/Excel)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                    onClick = {
+                                        showExportMenu = false
+                                        currentScan?.let { shareScanRecord(context, it, "csv") }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("💾 دانلود فایل CSV در Downloads", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                    onClick = {
+                                        showExportMenu = false
+                                        currentScan?.let { exportScanRecord(context, it, "csv") }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("💾 دانلود فایل JSON در Downloads", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                    onClick = {
+                                        showExportMenu = false
+                                        currentScan?.let { exportScanRecord(context, it, "json") }
+                                    }
+                                )
+                            }
+                        }
+
+                        // Toggle UI Overlay Visibility
                         IconButton(
-                            onClick = { showAddAnnotationDialog = true },
-                            modifier = Modifier.size(30.dp).testTag("add_annotation_button")
+                            onClick = { isAllUiHidden = !isAllUiHidden },
+                            modifier = Modifier.size(32.dp)
                         ) {
-                            Icon(Icons.Default.AddLocation, contentDescription = "Add Marker", tint = Color.White, modifier = Modifier.size(16.dp))
-                        }
-                        IconButton(onClick = { showExportMenu = true }, modifier = Modifier.size(30.dp)) {
-                            Icon(Icons.Default.FileDownload, contentDescription = "Export", tint = CyberCyan, modifier = Modifier.size(16.dp))
-                        }
-                        IconButton(onClick = { isAllUiHidden = !isAllUiHidden }, modifier = Modifier.size(30.dp)) {
                             Icon(
                                 imageVector = if (isAllUiHidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                                 contentDescription = "Toggle UI",
@@ -2285,207 +2383,172 @@ fun VisualizerScreen(viewModel: VisualizerViewModel, onNavigateToAi: () -> Unit 
             }
         }
 
-        // WORKSPACE BODY: Structurally bounded layout according to workspaceMode
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(6.dp)
-        ) {
-            when (workspaceMode) {
-                // MODE 1: SPLIT (Left: Viewport Canvas, Right: Dock Container with Tabs)
-                "SPLIT" -> {
+        // 3. Floating Quick Visual Overlay Switcher (Top Right: Wireframe vs Heatmap)
+        if (!isAllUiHidden) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.75f)),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.25f)),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 54.dp, end = 12.dp)
+                    .width(150.dp)
+                    .testTag("visual_overlay_toggle_card")
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp)
+                        .background(CardBg, RoundedCornerShape(8.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    val isWireframe = renderStyle == "Wireframe"
+                    val isHeatmap = renderStyle == "Heatmap"
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(28.dp)
+                            .background(
+                                color = if (isWireframe) CyberCyan.copy(alpha = 0.2f) else Color.Transparent,
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (isWireframe) CyberCyan else Color.Transparent,
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .clickable { viewModel.setRenderStyle("Wireframe") }
+                            .testTag("toggle_wireframe_mode"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("شبکه", color = if (isWireframe) CyberCyan else Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(28.dp)
+                            .background(
+                                color = if (isHeatmap) CyberCyan.copy(alpha = 0.2f) else Color.Transparent,
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (isHeatmap) CyberCyan else Color.Transparent,
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .clickable { viewModel.setRenderStyle("Heatmap") }
+                            .testTag("toggle_heatmap_mode"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("حرارتی", color = if (isHeatmap) CyberCyan else Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // 4. Sequential Capability Toolbar & Expandable Drawer Panel (Bottom Alignment)
+        if (!isAllUiHidden) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Expandable Feature Drawer (Appears neatly above the capability bar when a tab is clicked)
+                AnimatedVisibility(
+                    visible = activeCapabilityPanel != null,
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceBg.copy(alpha = 0.95f)),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.4f)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 280.dp)
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+                            // Drawer Header with Feature Title & Close Button
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val panelTitle = when (activeCapabilityPanel) {
+                                    0 -> "🤖 تحلیل هوشمند هوش مصنوعی (AI Analysis)"
+                                    1 -> "⚡ داده‌های زنده حسگر و تله‌متری (Sensors)"
+                                    2 -> "📏 پروفایل عمق و لایه‌های خاک (Depth Profile)"
+                                    3 -> "⚙️ تنظیمات رندر، فیلتر و رنگ (Render Settings)"
+                                    else -> ""
+                                }
+                                Text(panelTitle, color = CyberGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                IconButton(
+                                    onClick = { activeCapabilityPanel = null },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Close Panel", tint = Color.White, modifier = Modifier.size(16.dp))
+                                }
+                            }
+
+                            HorizontalDivider(color = CardBg, modifier = Modifier.padding(vertical = 6.dp))
+
+                            // Drawer Active Content Component
+                            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                                when (activeCapabilityPanel) {
+                                    0 -> AiInsightsContent()
+                                    1 -> SensorReadingsContent()
+                                    2 -> DepthProfileContent()
+                                    3 -> RenderControlsContent()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Tidy, Orderly Sequential Capability Bar
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SurfaceBg.copy(alpha = 0.92f)),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, CardBg),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Left: 3D Viewport Window (Bounded non-overlapping Box)
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = SurfaceBg),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, CardBg),
-                            modifier = Modifier
-                                .weight(1.5f)
-                                .fillMaxHeight()
-                        ) {
-                            ViewportPanelContent()
-                        }
+                        val capabilities = listOf(
+                            Triple(0, "🤖 هوش مصنوعی", CyberGold),
+                            Triple(1, "⚡ حسگرها", CyberCyan),
+                            Triple(2, "📏 پروفایل عمق", CyberGold),
+                            Triple(3, "⚙️ تنظیمات رندر", CyberCyan)
+                        )
 
-                        // Right: Dock Container Window (Clean Tabbed Dock)
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = SurfaceBg),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, CardBg),
-                            modifier = Modifier
-                                .weight(1.0f)
-                                .fillMaxHeight()
-                        ) {
-                            Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                                // Right Dock Tabs Header
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    val dockTabs = listOf(
-                                        "🤖 AI" to 0,
-                                        "⚡ حسگرها" to 1,
-                                        "📏 عمق" to 2,
-                                        "⚙️ تنظیمات" to 3
-                                    )
-                                    dockTabs.forEach { (label, idx) ->
-                                        val isSelected = activeRightDockTab == idx
-                                        Button(
-                                            onClick = { activeRightDockTab = idx },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (isSelected) CyberCyan.copy(alpha = 0.25f) else CardBg,
-                                                contentColor = if (isSelected) CyberCyan else Color.White
-                                            ),
-                                            shape = RoundedCornerShape(8.dp),
-                                            border = BorderStroke(1.dp, if (isSelected) CyberCyan else Color.Transparent),
-                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                                            modifier = Modifier.height(30.dp).weight(1f)
-                                        ) {
-                                            Text(label, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                // Dock Panel Body
-                                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                                    when (activeRightDockTab) {
-                                        0 -> AiInsightsContent()
-                                        1 -> SensorReadingsContent()
-                                        2 -> DepthProfileContent()
-                                        else -> RenderControlsContent()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // MODE 2: GRID (2x2 Docked Layout - Absolutely Zero Overlap)
-                "GRID" -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Top Row: Viewport (Left) + AI Insights (Right)
-                        Row(
-                            modifier = Modifier.weight(1.2f).fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = SurfaceBg),
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, CardBg),
-                                modifier = Modifier.weight(1.3f).fillMaxHeight()
+                        capabilities.forEach { (index, label, accentColor) ->
+                            val isSelected = activeCapabilityPanel == index
+                            Button(
+                                onClick = {
+                                    activeCapabilityPanel = if (isSelected) null else index
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isSelected) accentColor.copy(alpha = 0.25f) else CardBg,
+                                    contentColor = if (isSelected) accentColor else Color.White
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, if (isSelected) accentColor else Color.Transparent),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(36.dp).weight(1f)
                             ) {
-                                ViewportPanelContent()
-                            }
-
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = SurfaceBg),
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, CardBg),
-                                modifier = Modifier.weight(1.0f).fillMaxHeight()
-                            ) {
-                                AiInsightsContent()
-                            }
-                        }
-
-                        // Bottom Row: Depth & Soil Profile (Left) + Sensor Readout (Right)
-                        Row(
-                            modifier = Modifier.weight(1.0f).fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = SurfaceBg),
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, CardBg),
-                                modifier = Modifier.weight(1.0f).fillMaxHeight()
-                            ) {
-                                DepthProfileContent()
-                            }
-
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = SurfaceBg),
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, CardBg),
-                                modifier = Modifier.weight(1.0f).fillMaxHeight()
-                            ) {
-                                SensorReadingsContent()
-                            }
-                        }
-                    }
-                }
-
-                // MODE 3: FULL (100% Canvas Viewport Focus with Quick Floating Toolbar)
-                else -> {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        ViewportPanelContent(modifier = Modifier.fillMaxSize())
-
-                        // Floating Quick Dock Controls at bottom
-                        if (!isAllUiHidden) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = SurfaceBg.copy(alpha = 0.9f)),
-                                shape = RoundedCornerShape(16.dp),
-                                border = BorderStroke(1.dp, CardBg),
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .padding(bottom = 12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Button(
-                                        onClick = { workspaceMode = "SPLIT"; activeRightDockTab = 0 },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CardBg),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(28.dp)
-                                    ) {
-                                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = CyberGold, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("AI Insights", color = Color.White, fontSize = 9.sp)
-                                    }
-
-                                    Button(
-                                        onClick = { workspaceMode = "SPLIT"; activeRightDockTab = 1 },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CardBg),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(28.dp)
-                                    ) {
-                                        Icon(Icons.Default.Sensors, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Sensors", color = Color.White, fontSize = 9.sp)
-                                    }
-
-                                    Button(
-                                        onClick = { workspaceMode = "SPLIT"; activeRightDockTab = 2 },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CardBg),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(28.dp)
-                                    ) {
-                                        Icon(Icons.Default.Layers, contentDescription = null, tint = CyberGold, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Depth", color = Color.White, fontSize = 9.sp)
-                                    }
-
-                                    Button(
-                                        onClick = { workspaceMode = "SPLIT"; activeRightDockTab = 3 },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CardBg),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(28.dp)
-                                    ) {
-                                        Icon(Icons.Default.Tune, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Settings", color = Color.White, fontSize = 9.sp)
-                                    }
-                                }
+                                Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                             }
                         }
                     }
@@ -2494,1519 +2557,41 @@ fun VisualizerScreen(viewModel: VisualizerViewModel, onNavigateToAi: () -> Unit 
         }
     }
 
-    // Legacy floating overlay box replaced by docking system above
-    if (false) Box(modifier = Modifier.fillMaxSize()) {
-        // Main 3D Panel (Switchable between WebGL Three.js, D3.js SVG and Native Canvas)
-        when (renderEngine) {
-            "ThreeJS" -> {
-                ThreeDWebViewVisualizer(
-                    scan = currentScan,
-                    selectedNodeIndex = selectedNodeIndex,
-                    resetTrigger = resetTrigger,
-                    cameraPresetTrigger = cameraPresetTrigger,
-                    renderStyle = renderStyle,
-                    isRgbAnalysis = isRgbAnalysis,
-                    zScale = zScale,
-                    colorPalette = colorPalette,
-                    userAnnotations = userAnnotations,
-                    onNodeSelected = { viewModel.selectNode(it) },
-                    onRenderStyleChanged = { viewModel.setRenderStyle(it) },
-                    onRgbAnalysisChanged = { viewModel.setIsRgbAnalysis(it) },
-                    modifier = Modifier.fillMaxSize()
+    // Tutorial Help Dialog
+    if (showTutorialDialog) {
+        AlertDialog(
+            onDismissRequest = { showTutorialDialog = false },
+            containerColor = SurfaceBg,
+            title = {
+                Text(
+                    "راهنمای کار با نمایشگر سه‌بعدی OKM",
+                    color = CyberGold,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Right,
+                    modifier = Modifier.fillMaxWidth()
                 )
-            }
-            "D3JS" -> {
-                D3WebViewVisualizer(
-                    scan = currentScan,
-                    selectedNodeIndex = selectedNodeIndex,
-                    resetTrigger = resetTrigger,
-                    cameraPresetTrigger = cameraPresetTrigger,
-                    renderStyle = renderStyle,
-                    isRgbAnalysis = isRgbAnalysis,
-                    zScale = zScale,
-                    colorPalette = colorPalette,
-                    onNodeSelected = { viewModel.selectNode(it) },
-                    onRenderStyleChanged = { viewModel.setRenderStyle(it) },
-                    onRgbAnalysisChanged = { viewModel.setIsRgbAnalysis(it) },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            "Plan2D" -> {
-                PlanViewScreen(viewModel = viewModel)
-            }
-            else -> {
-                ThreeDGridVisualizer(
-                    scan = currentScan,
-                    yaw = yaw,
-                    pitch = pitch,
-                    zoom = zoom,
-                    panX = panX,
-                    panY = panY,
-                    zScale = zScale,
-                    colorThreshold = colorThreshold,
-                    renderStyle = renderStyle,
-                    isRgbAnalysis = isRgbAnalysis,
-                    selectedNodeIndex = selectedNodeIndex,
-                    onNodeSelected = { viewModel.selectNode(it) },
-                    onRotate = { dy, dp -> viewModel.rotate(dy, dp) },
-                    onZoom = { z -> viewModel.changeZoom(z) },
-                    onPan = { dx, dy -> viewModel.pan(dx, dy) },
-                    selectedDepthLayer = selectedDepthLayer,
-                    colorAutoScale = colorAutoScaleEnabled,
-                    colorPalette = colorPalette,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-
-        // Overlay Metrics (Sleek Interface Style)
-        if (!isAllUiHidden) {
-            val rawDataList = currentScan.getGridData()
-            val selectedVal = selectedNodeIndex?.let { rawDataList.getOrNull(it) }
-            
-            val isNodeSelected = selectedVal != null
-            val displayVal = selectedVal ?: (rawDataList.maxByOrNull { abs(it) } ?: 0f)
-            
-            val signalStrength = if (displayVal > 0) {
-                (abs(displayVal) / 8.5f).coerceIn(0f, 100f).toInt()
-            } else {
-                (abs(displayVal) / 6.5f).coerceIn(0f, 100f).toInt()
-            }
-            
-            val depthMeters = if (displayVal > 0) {
-                (20.0 - (abs(displayVal) / 850.0) * 18.0).coerceIn(0.5, 20.0)
-            } else {
-                (20.0 - (abs(displayVal) / 650.0) * 15.0).coerceIn(1.0, 20.0)
-            }
-            
-            val isFt = measurementUnit == "ft"
-            val displayDepth = if (isFt) depthMeters * 3.28084 else depthMeters
-            val depthUnitSymbol = if (isFt) "ft" else "m"
-
-            val selCol = selectedNodeIndex?.let { it % currentScan.width }
-            val selRow = selectedNodeIndex?.let { it / currentScan.width }
-
-            val soilLayerRow = @Composable { color: Color, name: String, depth: String, isActive: Boolean ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            color = if (isActive) CyberGold.copy(alpha = 0.08f) else Color.Transparent,
-                            shape = RoundedCornerShape(4.dp)
-                        )
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .background(color, shape = RoundedCornerShape(1.dp))
-                        )
-                        Text(
-                            text = name,
-                            color = if (isActive) CyberGold else Color.White,
-                            fontSize = 8.sp,
-                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-                    Text(
-                        text = depth,
-                        color = if (isActive) CyberGold.copy(alpha = 0.8f) else GrayText,
-                        fontSize = 7.sp,
-                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-                    )
-                }
-            }
-
-            if (isLeftMetricsVisible) {
+            },
+            text = {
                 Column(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(top = 60.dp, start = 12.dp),
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Header with Close Button
-                    Row(
-                        modifier = Modifier.width(200.dp).padding(horizontal = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(Icons.Default.Layers, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(12.dp))
-                            Text("ابزار محاسباتی عمق (Depth)", color = CyberCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        }
-                        IconButton(
-                            onClick = { isLeftMetricsVisible = false },
-                            modifier = Modifier.size(20.dp)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close Metrics", tint = CyberRed, modifier = Modifier.size(12.dp))
-                        }
-                    }
-
-                    // Main Info Card
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.85f)),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.3f)),
-                        modifier = Modifier.width(200.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            // Target location coordinate
-                            Text(
-                                text = if (isNodeSelected) "📍 ردیف ${selRow!! + 1}، ستون ${selCol!! + 1}" else "👆 روی نقشه ۳بعدی ضربه بزنید",
-                                color = if (isNodeSelected) CyberGold else GrayText,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            
-                            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(CardBg))
-
-                            // Depth & Signal values stacked beautifully side-by-side
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                // Depth
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (isNodeSelected) "عمق انتخابی" else "عمق تخمینی",
-                                        color = GrayText,
-                                        fontSize = 8.sp
-                                    )
-                                    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                                        Text(
-                                            text = String.format("%.2f", displayDepth),
-                                            color = CyberGold,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = depthUnitSymbol,
-                                            color = CyberGold.copy(alpha = 0.7f),
-                                            fontSize = 9.sp,
-                                            modifier = Modifier.padding(bottom = 2.dp)
-                                        )
-                                    }
-                                }
-
-                                // Signal
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (isNodeSelected) "سیگنال نقطه" else "سیگنال ماکزیمم",
-                                        color = GrayText,
-                                        fontSize = 8.sp
-                                    )
-                                    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                                        Text(
-                                            text = "$signalStrength",
-                                            color = CyberCyan,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = "%",
-                                            color = CyberCyan.copy(alpha = 0.7f),
-                                            fontSize = 9.sp,
-                                            modifier = Modifier.padding(bottom = 2.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Soil Layers Simulation Card
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.85f)),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, CardBg),
-                        modifier = Modifier.width(200.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                text = "📊 شبیه‌ساز لایه‌های عمق خاک",
-                                color = Color.White,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth().height(110.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Vertical Gauge
-                                Box(
-                                    modifier = Modifier
-                                        .width(16.dp)
-                                        .fillMaxHeight()
-                                        .background(
-                                            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                                                colors = listOf(
-                                                    Color(0xFF8B5A2B), // Surface Topsoil (Brown)
-                                                    Color(0xFFD2B48C), // Subsurface Clay (Tan)
-                                                    Color(0xFF708090), // Deep Mineral/Rocky (Grey)
-                                                    Color(0xFF2F4F4F)  // Bedrock (Dark Slate)
-                                                )
-                                            ),
-                                            shape = RoundedCornerShape(4.dp)
-                                        )
-                                ) {
-                                    // Map depthMeters (0.5m to 20.0m) to percentage (0.0f to 1.0f)
-                                    val pct = ((depthMeters - 0.5) / 19.5).coerceIn(0.0, 1.0).toFloat()
-                                    
-                                    Column(modifier = Modifier.fillMaxSize()) {
-                                        if (pct > 0f) {
-                                            Spacer(modifier = Modifier.weight(pct))
-                                        }
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(4.dp)
-                                                .background(CyberGold, RoundedCornerShape(2.dp))
-                                        )
-                                        if (1f - pct > 0f) {
-                                            Spacer(modifier = Modifier.weight((1f - pct).coerceAtLeast(0.01f)))
-                                        }
-                                    }
-                                }
-
-                                // Soil Layers text list with small color dots
-                                Column(
-                                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                                    verticalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    soilLayerRow(Color(0xFF8B5A2B), "سطحی (Topsoil)", "۰ تا ۳.۵م", depthMeters in 0.0..3.5)
-                                    soilLayerRow(Color(0xFFD2B48C), "رس و مواد معدنی", "۳.۵ تا ۸م", depthMeters in 3.5..8.0)
-                                    soilLayerRow(Color(0xFF708090), "سنگلاخی عمیق", "۸ تا ۱۴م", depthMeters in 8.0..14.0)
-                                    soilLayerRow(Color(0xFF2F4F4F), "بستر سنگی (Bedrock)", "۱۴ تا ۲۰م", depthMeters in 14.0..20.0)
-                                }
-                            }
-                        }
-                    }
+                    Text("۱. چرخش و زاویه دید: لمس و کشیدن روی صفحه برای تغییر زاویه دید سه‌بعدی.", color = Color.White, fontSize = 11.sp)
+                    Text("۲. جابه‌جایی و زوم: حرکت دو انگشتی برای بزرگ‌نمایی نقشه.", color = Color.White, fontSize = 11.sp)
+                    Text("۳. نوار قابلیت‌ها (پایین صفحه): انتخاب قابلیت‌های تحلیل AI، حسگر زنده، پروفایل عمق و تنظیمات رندر به ترتیب دلخواه.", color = Color.White, fontSize = 11.sp)
+                    Text("۴. نشانگرها: لمس هر نقطه روی اسکن و فشردن + برای ثبت یادداشت تخصصی.", color = Color.White, fontSize = 11.sp)
                 }
-            } else {
-                // Minimized Restore floating button on the left
+            },
+            confirmButton = {
                 Button(
-                    onClick = { isLeftMetricsVisible = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.75f)),
-                    border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.3f)),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(top = 60.dp, start = 12.dp)
-                        .height(30.dp),
-                    shape = RoundedCornerShape(8.dp)
+                    onClick = { showTutorialDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = CyberGold)
                 ) {
-                    Icon(Icons.Default.TrendingUp, contentDescription = "Show Metrics", tint = CyberCyan, modifier = Modifier.size(12.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("نمایش متریک‌ها", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Text("متوجه شدم", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
-        }
-
-        // Visual Overlay Toggle (Switches between Wireframe and Heatmap)
-        if (!isAllUiHidden) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.75f)),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.25f)),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 60.dp, end = 12.dp)
-                    .width(160.dp)
-                    .testTag("visual_overlay_toggle_card")
-            ) {
-                Column(
-                    modifier = Modifier.padding(8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = "تصویرساز سه‌بعدی (3D Mode)",
-                        color = GrayText,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(CardBg, RoundedCornerShape(8.dp))
-                            .padding(2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        val isWireframe = renderStyle == "Wireframe"
-                        val isHeatmap = renderStyle == "Heatmap"
-
-                        // Wireframe Option
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(30.dp)
-                                .background(
-                                    color = if (isWireframe) CyberCyan.copy(alpha = 0.2f) else Color.Transparent,
-                                    shape = RoundedCornerShape(6.dp)
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isWireframe) CyberCyan else Color.Transparent,
-                                    shape = RoundedCornerShape(6.dp)
-                                )
-                                .clickable { viewModel.setRenderStyle("Wireframe") }
-                                .testTag("toggle_wireframe_mode"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Layers,
-                                    contentDescription = "Wireframe Mode",
-                                    tint = if (isWireframe) CyberCyan else GrayText,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Text(
-                                    text = "شبکه",
-                                    color = if (isWireframe) CyberCyan else Color.White,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        // Heatmap Option
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(30.dp)
-                                .background(
-                                    color = if (isHeatmap) CyberCyan.copy(alpha = 0.2f) else Color.Transparent,
-                                    shape = RoundedCornerShape(6.dp)
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isHeatmap) CyberCyan else Color.Transparent,
-                                    shape = RoundedCornerShape(6.dp)
-                                )
-                                .clickable { viewModel.setRenderStyle("Heatmap") }
-                                .testTag("toggle_heatmap_mode"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Palette,
-                                    contentDescription = "Heatmap Mode",
-                                    tint = if (isHeatmap) CyberCyan else GrayText,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Text(
-                                    text = "حرارتی",
-                                    color = if (isHeatmap) CyberCyan else Color.White,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // CONTROL PANE (Floating overlays)
-        // Top HUD
-        if (!isAllUiHidden) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopStart)
-                    .padding(16.dp)
-                    .background(DarkBg.copy(alpha = 0.85f), RoundedCornerShape(16.dp))
-                    .border(BorderStroke(1.dp, CardBg.copy(alpha = 0.8f)), RoundedCornerShape(16.dp))
-                    .padding(12.dp)
-            ) {
-                if (isTopHudExpanded) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(currentScan.name, color = CyberGold, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                IconButton(
-                                    onClick = { isTopHudExpanded = false },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Minimize Panel", tint = CyberCyan, modifier = Modifier.size(18.dp))
-                                }
-                            }
-                            Text("خاک: ${currentScan.soilType} | طرح: ${currentScan.scanPattern}", color = GrayText, fontSize = 10.sp)
-                        }
-
-                        // Action buttons: Save, Reset Camera
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Button(
-                                onClick = {
-                                    viewModel.analyzeCurrentScanWithAi()
-                                    onNavigateToAi()
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = CyberGold,
-                                    contentColor = Color.Black
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                modifier = Modifier.height(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = "AI Analysis",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = Color.Black
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "تحلیل هوش مصنوعی",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            // 3D Scan Replay / Playback Toggle Button
-                            Button(
-                                onClick = { viewModel.togglePlaybackMode() },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isPlaybackActive) CyberGold else CardBg,
-                                    contentColor = if (isPlaybackActive) Color.Black else CyberCyan
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                modifier = Modifier.height(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaybackActive) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
-                                    contentDescription = "Scan Replay",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = if (isPlaybackActive) Color.Black else CyberCyan
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (isPlaybackActive) "توقف بازپخش" else "بازپخش اسکن",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            if (currentScan.id < 0 && currentScan.id != -100) { // Unsaved custom scan
-                                IconButton(
-                                    onClick = {
-                                        scanSaveName = "اسکن زمین ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())}"
-                                        scanSaveNotes = ""
-                                        showSaveDialog = true
-                                    },
-                                    colors = IconButtonDefaults.iconButtonColors(containerColor = CyberGold),
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(Icons.Default.Save, contentDescription = "Save", tint = Color.Black, modifier = Modifier.size(16.dp))
-                                }
-                            }
-
-                            // 3D Marker / Annotation Buttons
-                            Button(
-                                onClick = {
-                                    if (selectedNodeIndex != null) {
-                                        annotationCol = (selectedNodeIndex!! % currentScan.width) + 1
-                                        annotationRow = (selectedNodeIndex!! / currentScan.width) + 1
-                                    } else {
-                                        annotationCol = 1
-                                        annotationRow = 1
-                                    }
-                                    annotationLabel = ""
-                                    annotationNote = ""
-                                    annotationColor = "#FFD700"
-                                    showAddAnnotationDialog = true
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = CyberGold.copy(alpha = 0.15f),
-                                    contentColor = CyberGold
-                                ),
-                                border = BorderStroke(1.dp, CyberGold.copy(alpha = 0.5f)),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.height(36.dp).testTag("add_annotation_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AddLocation,
-                                    contentDescription = "Add Marker",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = CyberGold
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "نشانگر +",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Button(
-                                onClick = { showMarkersListDialog = true },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = CardBg,
-                                    contentColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.height(36.dp).testTag("list_annotations_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Bookmark,
-                                    contentDescription = "Markers List",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = CyberCyan
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "نشانگرها (${userAnnotations.size})",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Box {
-                                Button(
-                                    onClick = { showExportMenu = true },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = CardBg,
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                    modifier = Modifier.height(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Share,
-                                        contentDescription = "Export Data",
-                                        modifier = Modifier.size(16.dp),
-                                        tint = CyberGold
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "اشتراک / خروجی",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                DropdownMenu(
-                                    expanded = showExportMenu,
-                                    onDismissRequest = { showExportMenu = false },
-                                    modifier = Modifier.background(CardBg)
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("📤 اشتراک‌گذاری گزارش متنی (پیام‌رسان‌ها)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                        onClick = {
-                                            showExportMenu = false
-                                            currentScan?.let { shareScanRecord(context, it, "summary") }
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("📊 اشتراک‌گذاری فایل CSV (Surfer/Excel)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                        onClick = {
-                                            showExportMenu = false
-                                            currentScan?.let { shareScanRecord(context, it, "csv") }
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("💾 دانلود فایل CSV در Downloads", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                        onClick = {
-                                            showExportMenu = false
-                                            currentScan?.let { exportScanRecord(context, it, "csv") }
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("💾 دانلود فایل JSON در Downloads", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                        onClick = {
-                                            showExportMenu = false
-                                            currentScan?.let { exportScanRecord(context, it, "json") }
-                                        }
-                                    )
-                                }
-                            }
-
-                            Button(
-                                onClick = { viewModel.resetView() },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = CardBg,
-                                    contentColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                modifier = Modifier.height(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = "Reset Camera",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = Color.White
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "بازنشانی دوربین",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Box {
-                                Button(
-                                    onClick = { showPresetMenu = true },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = CardBg,
-                                        contentColor = CyberGold
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                    modifier = Modifier.height(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Visibility,
-                                        contentDescription = "Camera Presets",
-                                        modifier = Modifier.size(16.dp),
-                                        tint = CyberGold
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "نمای دوربین",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                DropdownMenu(
-                                    expanded = showPresetMenu,
-                                    onDismissRequest = { showPresetMenu = false },
-                                    modifier = Modifier.background(CardBg)
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("ایزومتریک (Isometric)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold) },
-                                        onClick = {
-                                            showPresetMenu = false
-                                            viewModel.setCameraPreset("Isometric")
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("نمای بالا (Top-Down)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold) },
-                                        onClick = {
-                                            showPresetMenu = false
-                                            viewModel.setCameraPreset("Top-Down")
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("برش جلو (Front Cross-Section)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold) },
-                                        onClick = {
-                                            showPresetMenu = false
-                                            viewModel.setCameraPreset("Front Cross-Section")
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("برش پهلو (Side Cross-Section)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold) },
-                                        onClick = {
-                                            showPresetMenu = false
-                                            viewModel.setCameraPreset("Side Cross-Section")
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    HorizontalDivider(
-                        color = CardBg.copy(alpha = 0.5f),
-                        thickness = 1.dp,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "موتور رندر:",
-                            color = GrayText,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        // OpenGL / WebGL 3D Terrain Button
-                        Button(
-                            onClick = { renderEngine = "ThreeJS" },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (renderEngine == "ThreeJS") CyberGold.copy(alpha = 0.2f) else CardBg,
-                                contentColor = if (renderEngine == "ThreeJS") CyberGold else Color.White
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, if (renderEngine == "ThreeJS") CyberGold else Color.Transparent),
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp).weight(1.2f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ViewInAr,
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp),
-                                tint = if (renderEngine == "ThreeJS") CyberGold else Color.White
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text("OpenGL / WebGL ۳D", fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        // D3.js Button
-                        Button(
-                            onClick = { renderEngine = "D3JS" },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (renderEngine == "D3JS") CyberCyan.copy(alpha = 0.2f) else CardBg,
-                                contentColor = if (renderEngine == "D3JS") CyberCyan else Color.White
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, if (renderEngine == "D3JS") CyberCyan else Color.Transparent),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp).weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.QueryStats,
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp),
-                                tint = if (renderEngine == "D3JS") CyberCyan else Color.White
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text("نمودار D3.js", fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        // Native Button
-                        Button(
-                            onClick = { renderEngine = "Native" },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (renderEngine == "Native") CyberCyan.copy(alpha = 0.2f) else CardBg,
-                                contentColor = if (renderEngine == "Native") CyberCyan else Color.White
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, if (renderEngine == "Native") CyberCyan else Color.Transparent),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp).weight(0.9f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Brush,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp),
-                                tint = if (renderEngine == "Native") CyberCyan else Color.White
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text("بومی Canvas", fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        // Plan 2D Button
-                        Button(
-                            onClick = { renderEngine = "Plan2D" },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (renderEngine == "Plan2D") CyberGold.copy(alpha = 0.2f) else CardBg,
-                                contentColor = if (renderEngine == "Plan2D") CyberGold else Color.White
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, if (renderEngine == "Plan2D") CyberGold else Color.Transparent),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp).weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Map,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp),
-                                tint = if (renderEngine == "Plan2D") CyberGold else Color.White
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text("دو بعدی OKM", fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    HorizontalDivider(
-                        color = CardBg.copy(alpha = 0.5f),
-                        thickness = 1.dp,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "پالت رنگ:",
-                            color = GrayText,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.width(55.dp)
-                        )
-
-                        val palettes = listOf(
-                            "Thermal" to "حرارتی 🔥",
-                            "Classic" to "کلاسیک 🏆",
-                            "Grayscale" to "خاکستری 🔳",
-                            "Contrast" to "کنتراست ⚡",
-                            "IronOxide" to "معدنی 🧱"
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .weight(1f)
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            palettes.forEach { (id, label) ->
-                                val isSelected = colorPalette == id
-                                Button(
-                                    onClick = { viewModel.setColorPalette(id) },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isSelected) CyberCyan.copy(alpha = 0.2f) else CardBg,
-                                        contentColor = if (isSelected) CyberCyan else Color.White
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    border = BorderStroke(1.dp, if (isSelected) CyberCyan else Color.Transparent),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // Collapsed sleek bar for Top HUD
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(currentScan.name, color = CyberGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            val engineLabel = when (renderEngine) {
-                                "ThreeJS" -> "WebGL"
-                                "D3JS" -> "D3.js"
-                                "Plan2D" -> "۲D Plan"
-                                else -> "بومی"
-                            }
-                            Text("($engineLabel)", color = GrayText, fontSize = 10.sp)
-                        }
-                        Button(
-                            onClick = { isTopHudExpanded = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = CardBg),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                            modifier = Modifier.height(28.dp),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Expand", tint = CyberCyan, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("ابزارها و موتورهای رندر", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
-
-        // Floating Adjustments Drawer (Bottom Expandable Controls)
-        if (!isAllUiHidden) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = SurfaceBg.copy(alpha = 0.92f)),
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .border(BorderStroke(1.dp, CardBg), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-            ) {
-                if (isBottomDrawerExpanded) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // Title bar with Minimize
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(Icons.Default.Tune, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(16.dp))
-                                Text("تنظیمات رندر و حذف نویز", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                            IconButton(
-                                onClick = { isBottomDrawerExpanded = false },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize", tint = GrayText)
-                            }
-                        }
-
-                        HorizontalDivider(color = CardBg.copy(alpha = 0.3f))
-
-                        // Auto Height Scale Toggle
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = CyberCyan,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "مقیاس‌گذاری خودکار ارتفاع (Auto Height Scale)",
-                                        color = Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = if (isAutoScaleEnabled) "تنظیم هوشمند بر اساس شدت سیگنال (۳D Auto)" else "کنترل دستی ضریب تقویت ارتفاع (Manual)",
-                                        color = GrayText,
-                                        fontSize = 9.sp
-                                    )
-                                }
-                            }
-                            Switch(
-                                checked = isAutoScaleEnabled,
-                                onCheckedChange = { viewModel.setAutoScaleEnabled(it) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = CyberCyan,
-                                    checkedTrackColor = CyberCyan.copy(alpha = 0.5f)
-                                )
-                            )
-                        }
-
-                        // Slider 1: Vertical Amplification (Z-scale)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text("تقویت ارتفاع (Z-Scale)", color = CyberCyan, fontSize = 11.sp, modifier = Modifier.width(100.dp))
-                            Slider(
-                                value = zScale,
-                                onValueChange = { viewModel.setZScale(it) },
-                                valueRange = 0.1f..3.0f,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = CyberCyan,
-                                    activeTrackColor = CyberCyan,
-                                    inactiveTrackColor = CardBg
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(String.format("%.1fx", zScale), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        // Slider 2: Color Noise Filter (Threshold)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text("حذف ذرات (Threshold)", color = CyberGold, fontSize = 11.sp, modifier = Modifier.width(100.dp))
-                            Slider(
-                                value = colorThreshold,
-                                onValueChange = { viewModel.setColorThreshold(it) },
-                                valueRange = 0.0f..0.85f,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = CyberGold,
-                                    activeTrackColor = CyberGold,
-                                    inactiveTrackColor = CardBg
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(String.format("%d%%", (colorThreshold * 100).toInt()), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        // Slider 2.5: Real-Time Digital Filter Slider (Low-pass/High-pass)
-                        val filterStrength by viewModel.filterStrength.collectAsStateWithLifecycle()
-                        
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Column(modifier = Modifier.width(100.dp)) {
-                                Text(
-                                    text = "فیلتر دیجیتال",
-                                    color = CyberRed,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Digital Filter",
-                                    color = GrayText,
-                                    fontSize = 8.sp
-                                )
-                            }
-                            
-                            Slider(
-                                value = filterStrength,
-                                onValueChange = { viewModel.setFilterStrength(it) },
-                                valueRange = -1.0f..1.0f,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = CyberRed,
-                                    activeTrackColor = CyberRed,
-                                    inactiveTrackColor = CardBg
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
-                            
-                            Column(
-                                horizontalAlignment = Alignment.End,
-                                modifier = Modifier.width(75.dp)
-                            ) {
-                                val filterPercent = (abs(filterStrength) * 100).toInt()
-                                val filterLabel = when {
-                                    filterStrength > 0.05f -> "LPF $filterPercent%"
-                                    filterStrength < -0.05f -> "HPF $filterPercent%"
-                                    else -> "RAW"
-                                }
-                                Text(
-                                    text = filterLabel,
-                                    color = if (abs(filterStrength) < 0.05f) Color.White else CyberRed,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = when {
-                                        filterStrength > 0.05f -> "پایین‌گذر (نویز)"
-                                        filterStrength < -0.05f -> "بالاگذر (هدف)"
-                                        else -> "بدون فیلتر"
-                                    },
-                                    color = GrayText,
-                                    fontSize = 8.sp
-                                )
-                            }
-                        }
-
-                        // Row: Smart Soil Noise Filter & Interpolation Toggle
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.FilterList,
-                                    contentDescription = null,
-                                    tint = CyberGold,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "حذف آلودگی خاک و اینترپلیشن",
-                                        color = Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "حذف مواد معدنی مزاحم و تصفیه هوشمند تصویر آنومالی",
-                                        color = GrayText,
-                                        fontSize = 9.sp
-                                    )
-                                }
-                            }
-                            Switch(
-                                checked = soilNoiseFilterEnabled,
-                                onCheckedChange = { viewModel.setSoilNoiseFilterEnabled(it) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = CyberGold,
-                                    checkedTrackColor = CyberGold.copy(alpha = 0.4f),
-                                    uncheckedThumbColor = Color.Gray,
-                                    uncheckedTrackColor = CardBg
-                                )
-                            )
-                        }
-
-                        // Color Auto-Scale Switch
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = CyberCyan,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "مقیاس‌گذاری خودکار طیف رنگ",
-                                        color = Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "تنظیم خودکار گستره رنگ بر اساس مینیمم و ماکزیمم اسکن",
-                                        color = GrayText,
-                                        fontSize = 9.sp
-                                    )
-                                }
-                            }
-                            Switch(
-                                checked = colorAutoScaleEnabled,
-                                onCheckedChange = { viewModel.setColorAutoScaleEnabled(it) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = CyberCyan,
-                                    checkedTrackColor = CyberCyan.copy(alpha = 0.4f),
-                                    uncheckedThumbColor = Color.Gray,
-                                    uncheckedTrackColor = CardBg
-                                )
-                            )
-                        }
-
-                        // Flatten Base / Ground Plane Auto-Level Switch
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Compress,
-                                    contentDescription = null,
-                                    tint = CyberGold,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "تراز و مسطح‌سازی بستر زمین (Base Flattening)",
-                                        color = Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "محاسبه خودکار خط بستر (${String.format("%.1f", groundPlaneStats.baselineOffset)} LSB) و تسویه نویز خاک",
-                                        color = GrayText,
-                                        fontSize = 9.sp
-                                    )
-                                }
-                            }
-                            Switch(
-                                checked = flattenBaseEnabled,
-                                onCheckedChange = { viewModel.setFlattenBaseEnabled(it) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = CyberGold,
-                                    checkedTrackColor = CyberGold.copy(alpha = 0.4f),
-                                    uncheckedThumbColor = Color.Gray,
-                                    uncheckedTrackColor = CardBg
-                                )
-                            )
-                        }
-
-                        // Modern Signal & Anomaly Color Legend Component
-                        ModernSignalLegend(
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-
-                        // Slider 3: RGB 3-Color Analysis Switch
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Palette,
-                                    contentDescription = null,
-                                    tint = CyberCyan,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "تحلیل سه رنگ (RGB Analysis)",
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "قرمز: فلز | آبی: حفره | سبز: زمین بکر",
-                                        color = GrayText,
-                                        fontSize = 10.sp
-                                    )
-                                }
-                            }
-                            Switch(
-                                checked = isRgbAnalysis,
-                                onCheckedChange = { viewModel.setIsRgbAnalysis(it) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = CyberCyan,
-                                    checkedTrackColor = CyberCyan.copy(alpha = 0.4f),
-                                    uncheckedThumbColor = Color.Gray,
-                                    uncheckedTrackColor = CardBg
-                                )
-                            )
-                        }
-
-                        // Soil Depth Layers Selector
-                        HorizontalDivider(color = CardBg.copy(alpha = 0.3f))
-                        
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Layers,
-                                        contentDescription = null,
-                                        tint = CyberGold,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Column {
-                                        Text(
-                                            text = "انتخاب لایه خاک (Soil Depth Layer)",
-                                            color = Color.White,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = "فیلتر سه‌بعدی و دوبعدی اهداف مدفون بر اساس عمق",
-                                            color = GrayText,
-                                            fontSize = 9.sp
-                                        )
-                                    }
-                                }
-                                
-                                Text(
-                                    text = when (selectedDepthLayer) {
-                                        "Surface" -> "۰ تا ۳.۵ متر"
-                                        "Subsurface" -> "۳.۵ تا ۸ متر"
-                                        "Deep" -> "۸ تا ۱۴ متر"
-                                        "Bedrock" -> "۱۴ تا ۲۰ متر"
-                                        else -> "تمام لایه‌ها (۰-۲۰m)"
-                                    },
-                                    color = CyberGold,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                listOf("All", "Surface", "Subsurface", "Deep", "Bedrock").forEach { layer ->
-                                    val active = selectedDepthLayer == layer
-                                    val persianLabel = when (layer) {
-                                        "All" -> "همه"
-                                        "Surface" -> "سطحی"
-                                        "Subsurface" -> "میان‌سطحی"
-                                        "Deep" -> "عمیق"
-                                        else -> "بستر"
-                                    }
-                                    val layerColor = when (layer) {
-                                        "Surface" -> CyberCyan
-                                        "Subsurface" -> CyberGold
-                                        "Deep" -> CyberRed
-                                        "Bedrock" -> Color(0xFF9C27B0)
-                                        else -> Color.White
-                                    }
-                                    Button(
-                                        onClick = { viewModel.setSelectedDepthLayer(layer) },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (active) layerColor.copy(alpha = 0.25f) else CardBg,
-                                            contentColor = if (active) layerColor else Color.White
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        border = BorderStroke(1.dp, if (active) layerColor else Color.Transparent),
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(28.dp).weight(1f)
-                                    ) {
-                                        Text(
-                                            text = persianLabel,
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        HorizontalDivider(color = CardBg.copy(alpha = 0.3f))
-
-                        // Render styles switcher & legends
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Styles Selector
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                listOf("Solid", "Wireframe", "Points", "Heatmap").forEach { style ->
-                                    val active = renderStyle == style
-                                    val persianLabel = when (style) {
-                                        "Solid" -> "حجمی (Solid)"
-                                        "Wireframe" -> "شبکه (Wire)"
-                                        "Points" -> "نقاط (Points)"
-                                        else -> "حرارتی (Heatmap)"
-                                    }
-                                    FilterChip(
-                                        selected = active,
-                                        onClick = { viewModel.setRenderStyle(style) },
-                                        label = { Text(persianLabel, fontSize = 10.sp) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = CyberCyan.copy(alpha = 0.2f),
-                                            selectedLabelColor = CyberCyan,
-                                            containerColor = CardBg,
-                                            labelColor = Color.White
-                                        )
-                                    )
-                                }
-                            }
-
-                            // Scan grid size text indicator
-                            Text(
-                                "${currentScan.width}×${currentScan.length} (${currentScan.width * currentScan.length} نقطه)",
-                                color = GrayText,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-                } else {
-                    // Minimized sleek bar
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { isBottomDrawerExpanded = true }
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(Icons.Default.Tune, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(16.dp))
-                            Text("تنظیمات رندر و حذف نویز (Z-Scale & Threshold)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text("بزرگ‌نمایی", color = CyberCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Expand", tint = CyberCyan, modifier = Modifier.size(16.dp))
-                        }
-                    }
-                }
-            }
-        }
-
-        // Floating Global HUD visibility toggle (Glassmorphic design)
-        if (!isAllUiHidden) {
-            val gridScanData = currentScan.getGridData()
-            val scanMaxSignal = remember(gridScanData) {
-                val absMax = gridScanData.maxOfOrNull { abs(it) } ?: 500f
-                if (absMax == 0f) 500f else absMax
-            }
-            val selNodeSignal = selectedNodeIndex?.let { gridScanData.getOrNull(it) }
-
-            if (isPlaybackActive) {
-                ScanPlaybackControllerCard(
-                    viewModel = viewModel,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 60.dp, start = 16.dp, end = 16.dp)
-                        .zIndex(150f)
-                )
-            } else {
-                SignalGradientLegendCard(
-                    maxAbsSignal = scanMaxSignal,
-                    selectedSignalValue = selNodeSignal,
-                    colorPalette = colorPalette,
-                    isExpandedDefault = false,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 60.dp, start = 16.dp, end = 16.dp)
-                )
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 16.dp)
-                .zIndex(100f)
-        ) {
-            FloatingActionButton(
-                onClick = { isAllUiHidden = !isAllUiHidden },
-                containerColor = if (isAllUiHidden) DarkBg.copy(alpha = 0.6f) else CyberCyan.copy(alpha = 0.15f),
-                contentColor = if (isAllUiHidden) GrayText else CyberCyan,
-                shape = CircleShape,
-                modifier = Modifier
-                    .size(46.dp)
-                    .border(
-                        BorderStroke(
-                            1.dp,
-                            if (isAllUiHidden) GrayText.copy(alpha = 0.3f) else CyberCyan.copy(alpha = 0.5f)
-                        ),
-                        CircleShape
-                    )
-            ) {
-                Icon(
-                    imageVector = if (isAllUiHidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                    contentDescription = "Toggle HUD Visibility",
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
+        )
     }
 
     // Elegant Persian Save dialog
@@ -5173,263 +3758,240 @@ fun HistoryScreen(
             )
         }
 
-        if (savedScans.isEmpty()) {
-            // Display clean empty states with predefined templates
-            Card(
-                colors = CardDefaults.cardColors(containerColor = SurfaceBg),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        Icons.Default.History,
-                        contentDescription = null,
-                        tint = CyberGold.copy(alpha = 0.5f),
-                        modifier = Modifier.size(48.dp)
-                    )
-                    Text(
-                        "هنوز هیچ اسکنی انجام و ذخیره نشده است",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        "جهت آزمایش سریع موتور تصویربرداری سه‌بعدی OKM، می‌توانید از یکی از ۴ سناریو و قالب‌های باستانی زیر به صورت آزمایشی استفاده کنید:",
-                        color = GrayText,
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 16.sp
-                    )
-                }
+        val (userScans, demoScans) = remember(savedScans) {
+            savedScans.partition { scan ->
+                !scan.name.contains("پیش‌فرض") && 
+                !scan.name.contains("گنجینه") && 
+                !scan.name.contains("غار عمیق") && 
+                !scan.name.contains("مقبره") && 
+                !scan.name.contains("خط لوله")
             }
-        } else {
-            // Display scrollable list of user's saved scans
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text("اسکن‌های ثبت شده شما (User Scans)", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                savedScans.forEach { scan ->
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // User Scans Section
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "اسکن‌های اختصاصی ثبت‌شده شما (${userScans.size})",
+                        color = CyberGold,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (userScans.isNotEmpty()) {
+                        Text(
+                            text = "ذخیره‌شده در دیتابیس دستگاه",
+                            color = GrayText,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+
+                if (userScans.isEmpty()) {
                     Card(
                         colors = CardDefaults.cardColors(containerColor = SurfaceBg),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = {
-                            viewModel.loadScan(scan)
-                            onLoadScan()
-                        }
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(scan.name, color = CyberGold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                Text(
-                                    "شبکه: ${scan.width}×${scan.length} | خاک: ${scan.soilType}",
-                                    color = GrayText,
-                                    fontSize = 11.sp
-                                )
-                                if (scan.notes.isNotEmpty()) {
-                                    Text(scan.notes, color = Color.White.copy(alpha = 0.6f), fontSize = 10.sp, maxLines = 1)
-                                }
-                            }
-                            
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                // Dedicated Playback / Replay Button
-                                IconButton(
-                                    onClick = {
-                                        viewModel.loadScan(scan)
-                                        viewModel.togglePlaybackMode()
-                                        onLoadScan()
-                                    },
-                                    colors = IconButtonDefaults.iconButtonColors(containerColor = CyberGold.copy(alpha = 0.2f))
-                                ) {
-                                    Icon(Icons.Default.PlayCircle, contentDescription = "Replay Scan", tint = CyberGold, modifier = Modifier.size(18.dp))
-                                }
-
-                                // Dedicated Share Menu Button
-                                var showHistoryShareMenu by remember { mutableStateOf(false) }
-                                Box {
-                                    IconButton(
-                                        onClick = { showHistoryShareMenu = true },
-                                        colors = IconButtonDefaults.iconButtonColors(containerColor = CardBg)
-                                    ) {
-                                        Icon(Icons.Default.Share, contentDescription = "Share Scan", tint = CyberGold, modifier = Modifier.size(18.dp))
-                                    }
-
-                                    DropdownMenu(
-                                        expanded = showHistoryShareMenu,
-                                        onDismissRequest = { showHistoryShareMenu = false },
-                                        modifier = Modifier.background(CardBg)
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("📤 اشتراک‌گذاری گزارش متنی (واتساپ/تلگرام)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                            onClick = {
-                                                showHistoryShareMenu = false
-                                                shareScanRecord(context, scan, "summary")
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("📊 اشتراک‌گذاری فایل CSV (Surfer/Excel)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                            onClick = {
-                                                showHistoryShareMenu = false
-                                                shareScanRecord(context, scan, "csv")
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("📑 اشتراک‌گذاری فایل JSON", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                            onClick = {
-                                                showHistoryShareMenu = false
-                                                shareScanRecord(context, scan, "json")
-                                            }
-                                        )
-                                    }
-                                }
-
-                                // Export/Download Menu Button
-                                var showHistoryExportMenu by remember { mutableStateOf(false) }
-                                Box {
-                                    IconButton(
-                                        onClick = { showHistoryExportMenu = true },
-                                        colors = IconButtonDefaults.iconButtonColors(containerColor = CardBg)
-                                    ) {
-                                        Icon(Icons.Default.Download, contentDescription = "Export Scan", tint = CyberCyan, modifier = Modifier.size(18.dp))
-                                    }
-
-                                    DropdownMenu(
-                                        expanded = showHistoryExportMenu,
-                                        onDismissRequest = { showHistoryExportMenu = false },
-                                        modifier = Modifier.background(CardBg)
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("💾 ذخیره CSV در Downloads", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                            onClick = {
-                                                showHistoryExportMenu = false
-                                                exportScanRecord(context, scan, "csv")
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("💾 ذخیره JSON در Downloads", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                            onClick = {
-                                                showHistoryExportMenu = false
-                                                exportScanRecord(context, scan, "json")
-                                            }
-                                        )
-                                    }
-                                }
-                                IconButton(
-                                    onClick = { viewModel.deleteScan(scan.id) },
-                                    colors = IconButtonDefaults.iconButtonColors(containerColor = CardBg)
-                                ) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(18.dp))
-                                }
-                                Icon(Icons.Default.ChevronRight, contentDescription = "Load", tint = CyberCyan)
-                            }
+                            Text(
+                                "هنوز هیچ اسکن جدیدی توسط شما ثبت نشده است",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "پس از اتمام هر اسکن در تب اسکن (Scan)، فایل پردازش شده به صورت خودکار در این قسمت ذخیره و نمایش داده خواهد شد.",
+                                color = GrayText,
+                                fontSize = 10.sp,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
+                } else {
+                    userScans.forEach { scan ->
+                        ScanHistoryCard(
+                            scan = scan,
+                            isUserScan = true,
+                            viewModel = viewModel,
+                            onLoadScan = onLoadScan,
+                            context = context
+                        )
+                    }
+                }
+            }
+
+            // Demo / Standard Templates Section
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "قالب‌ها و سناریوهای استاندارد پیش‌فرض (${if (demoScans.isEmpty()) savedScans.size else demoScans.size})",
+                    color = CyberCyan,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                val displayDemoList = if (demoScans.isEmpty()) savedScans else demoScans
+                displayDemoList.forEach { scan ->
+                    ScanHistoryCard(
+                        scan = scan,
+                        isUserScan = false,
+                        viewModel = viewModel,
+                        onLoadScan = onLoadScan,
+                        context = context
+                    )
                 }
             }
         }
+    }
+}
 
-        // PREDEFINED OKM TEMPLATES (Always accessible as reference standard scans)
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+@Composable
+fun ScanHistoryCard(
+    scan: ScanRecord,
+    isUserScan: Boolean,
+    viewModel: VisualizerViewModel,
+    onLoadScan: () -> Unit,
+    context: android.content.Context
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SurfaceBg),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+        onClick = {
+            viewModel.loadScan(scan)
+            onLoadScan()
+        }
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("سناریوهای اسکن باستانی و کالیبره‌شده", color = CyberGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                // Template 1: Gold Chest
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = SurfaceBg),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        viewModel.loadPredefinedScan("buried_gold_chest")
-                        onLoadScan()
-                        Toast.makeText(context, "صندوقچه طلا با موفقیت بارگذاری شد!", Toast.LENGTH_SHORT).show()
-                    }
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Default.Brightness5, contentDescription = null, tint = CyberGold)
-                        Text("صندوقچه طلا (Gold)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        Text("یک هدف فلزی قوی در عمق ۲.۸ متری", color = GrayText, fontSize = 9.sp)
+                    Text(
+                        scan.name,
+                        color = if (isUserScan) CyberGold else Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Surface(
+                        color = if (isUserScan) CyberGold.copy(alpha = 0.2f) else CyberCyan.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = if (isUserScan) "اسکن اختصاصی شما" else "قالب پیش‌فرض",
+                            color = if (isUserScan) CyberGold else CyberCyan,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
                     }
                 }
-
-                // Template 2: Deep Cavity
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = SurfaceBg),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        viewModel.loadPredefinedScan("deep_cave")
-                        onLoadScan()
-                        Toast.makeText(context, "حفره و اتاقک با موفقیت بارگذاری شد!", Toast.LENGTH_SHORT).show()
-                    }
-                ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Default.CropDin, contentDescription = null, tint = CyberCyan)
-                        Text("اتاقک/غار (Cave)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        Text("یک آنومالی حفره‌ای بزرگ در عمق ۵متری", color = GrayText, fontSize = 9.sp)
-                    }
+                Text(
+                    "ابعاد شبکه: ${scan.width}×${scan.length} | نوع خاک: ${scan.soilType}",
+                    color = GrayText,
+                    fontSize = 11.sp
+                )
+                if (scan.notes.isNotEmpty()) {
+                    Text(
+                        scan.notes,
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 10.sp,
+                        maxLines = 1
+                    )
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                // Template 3: Diagonal Tunnel & Gold Grave
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = SurfaceBg),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // Playback button
+                IconButton(
                     onClick = {
-                        viewModel.loadPredefinedScan("ancient_grave_and_tunnel")
+                        viewModel.loadScan(scan)
+                        viewModel.togglePlaybackMode()
                         onLoadScan()
-                        Toast.makeText(context, "تونل و مقبره با موفقیت بارگذاری شد!", Toast.LENGTH_SHORT).show()
-                    }
+                    },
+                    colors = IconButtonDefaults.iconButtonColors(containerColor = CyberGold.copy(alpha = 0.2f))
                 ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Default.ShowChart, contentDescription = null, tint = CyberRed)
-                        Text("تونل و مقبره", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        Text("یک دالان باستانی حاوی دفینه فلزی", color = GrayText, fontSize = 9.sp)
+                    Icon(
+                        Icons.Default.PlayCircle,
+                        contentDescription = "Replay",
+                        tint = CyberGold,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                // Share menu
+                var showShareMenu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(
+                        onClick = { showShareMenu = true },
+                        colors = IconButtonDefaults.iconButtonColors(containerColor = CardBg)
+                    ) {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = "Share",
+                            tint = CyberGold,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showShareMenu,
+                        onDismissRequest = { showShareMenu = false },
+                        modifier = Modifier.background(CardBg)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("📤 اشتراک گزارش متنی", color = Color.White, fontSize = 11.sp) },
+                            onClick = {
+                                showShareMenu = false
+                                shareScanRecord(context, scan, "summary")
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("📊 اشتراک فایل CSV (Excel)", color = Color.White, fontSize = 11.sp) },
+                            onClick = {
+                                showShareMenu = false
+                                shareScanRecord(context, scan, "csv")
+                            }
+                        )
                     }
                 }
 
-                // Template 4: Ferrous pipes
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = SurfaceBg),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        viewModel.loadPredefinedScan("pipeline")
-                        onLoadScan()
-                        Toast.makeText(context, "خط لوله با موفقیت بارگذاری شد!", Toast.LENGTH_SHORT).show()
-                    }
+                // Delete button
+                IconButton(
+                    onClick = { viewModel.deleteScan(scan.id) },
+                    colors = IconButtonDefaults.iconButtonColors(containerColor = CardBg)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Default.LinearScale, contentDescription = null, tint = Color.Gray)
-                        Text("خط لوله خدمات", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        Text("لوله‌های انتقال خدمات شهری آهنی", color = GrayText, fontSize = 9.sp)
-                    }
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = Color.Red,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
+
+                Icon(Icons.Default.ChevronRight, contentDescription = "Load", tint = CyberCyan)
             }
         }
-        
-        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 

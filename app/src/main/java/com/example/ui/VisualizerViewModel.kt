@@ -1120,35 +1120,41 @@ class VisualizerViewModel(
 
     private fun finishScan() {
         _isScanActive.value = false
+        val dataList = _activeScanData.value.toList()
+        val timestamp = System.currentTimeMillis()
+        val recordName = "اسکن زمین ${timestamp % 10000}"
+        
         val record = ScanRecord(
-            id = -1,
-            name = "اسکن جدید (${System.currentTimeMillis() % 10000})",
+            id = 0,
+            name = recordName,
             width = _gridWidth.value,
             length = _gridLength.value,
             soilType = _soilType.value,
             scanPattern = _scanPattern.value,
-            gridDataJson = ScanRecord.createGridDataJson(_activeScanData.value),
-            notes = "اسکن زنده ضبط شده توسط دستگاه"
+            gridDataJson = ScanRecord.createGridDataJson(dataList),
+            notes = "اسکن زنده ثبت شده توسط سنسور"
         )
-        _viewedScan.value = record
         _selectedNodeIndex.value = null
 
         viewModelScope.launch {
             try {
+                val insertedId = repository.insertScan(record)
+                val savedRecord = record.copy(id = insertedId.toInt())
+                _viewedScan.value = savedRecord
+
                 val sessionEntity = ScanSessionEntity(
-                    sessionName = record.name,
-                    timestamp = System.currentTimeMillis(),
-                    gridWidth = record.width,
-                    gridLength = record.length,
-                    soilType = record.soilType,
-                    scanPattern = record.scanPattern,
+                    sessionName = savedRecord.name,
+                    timestamp = timestamp,
+                    gridWidth = savedRecord.width,
+                    gridLength = savedRecord.length,
+                    soilType = savedRecord.soilType,
+                    scanPattern = savedRecord.scanPattern,
                     sensorType = sensorManager.sensorType.value.name,
-                    operatorNotes = record.notes
+                    operatorNotes = savedRecord.notes
                 )
-                val dataList = _activeScanData.value
                 val pointsList = ArrayList<ScanPointEntity>()
-                val w = record.width
-                val l = record.length
+                val w = savedRecord.width
+                val l = savedRecord.length
                 for (y in 0 until l) {
                     for (x in 0 until w) {
                         val idx = y * w + x
@@ -1176,25 +1182,33 @@ class VisualizerViewModel(
                     }
                 }
                 repository.saveFull3DScanSession(sessionEntity, pointsList)
+                persistActiveStateToDb()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
-
-        persistActiveStateToDb()
     }
 
     // Save scan to database
     fun saveScan(name: String, notes: String) {
-        val recordToSave = _viewedScan.value ?: return
+        val currentRecord = _viewedScan.value
+        val dataList = currentRecord?.getGridData() ?: _activeScanData.value.toList()
+        if (dataList.isEmpty()) return
+
+        val width = currentRecord?.width ?: _gridWidth.value
+        val length = currentRecord?.length ?: _gridLength.value
+        val soil = currentRecord?.soilType ?: _soilType.value
+        val pattern = currentRecord?.scanPattern ?: _scanPattern.value
+
         viewModelScope.launch {
             val record = ScanRecord(
+                id = if (currentRecord != null && currentRecord.id > 0) currentRecord.id else 0,
                 name = name.ifEmpty { "اسکن بدون نام" },
-                width = recordToSave.width,
-                length = recordToSave.length,
-                soilType = recordToSave.soilType,
-                scanPattern = recordToSave.scanPattern,
-                gridDataJson = recordToSave.gridDataJson,
+                width = width,
+                length = length,
+                soilType = soil,
+                scanPattern = pattern,
+                gridDataJson = ScanRecord.createGridDataJson(dataList),
                 notes = notes
             )
             val newId = repository.insertScan(record)

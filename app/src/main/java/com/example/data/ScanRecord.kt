@@ -13,7 +13,10 @@ data class ScanRecord(
     val soilType: String,
     val scanPattern: String,
     val gridDataJson: String, // Space-separated floats, e.g. "23.4 45.2 -10.5..."
-    val notes: String = ""
+    val notes: String = "",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val locationName: String = ""
 ) {
     // Helper to get raw float data as List<Float>
     fun getGridData(): List<Float> {

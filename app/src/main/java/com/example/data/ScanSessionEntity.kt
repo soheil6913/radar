@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 
 /**
  * Room entity representing a top-level ground scan session.
- * Stores spatial dimensions, soil properties, and metadata for 3D visualization.
+ * Stores spatial dimensions, soil properties, date/location metadata, and raw sensor array data.
  */
 @Entity(tableName = "scan_sessions")
 data class ScanSessionEntity(
@@ -18,7 +18,12 @@ data class ScanSessionEntity(
     val scanPattern: String = "زیگزاگ (Zig-Zag)",
     val sensorType: String = "GOLD_RADAR_X20",
     val maxDepthMeters: Float = 3.5f,
-    val operatorNotes: String = ""
+    val operatorNotes: String = "",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val locationName: String = "",
+    val rawSensorDataJson: String = ""
 ) {
     val totalGridPoints: Int get() = gridWidth * gridLength
 }
+

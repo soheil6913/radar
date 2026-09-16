@@ -45,17 +45,8 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            val persianLocale = Locale("fa", "IR")
-            val result = tts?.setLanguage(persianLocale)
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                val fallbackFa = Locale("fa")
-                val resultFa = tts?.setLanguage(fallbackFa)
-                if (resultFa == TextToSpeech.LANG_MISSING_DATA || resultFa == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    Log.w(TAG, "Persian language not fully supported on this TTS engine, using default locale")
-                    tts?.setLanguage(Locale.getDefault())
-                }
-            }
-            tts?.setSpeechRate(0.95f)
+            setupPersianLocale()
+            tts?.setSpeechRate(0.92f)
 
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
@@ -80,30 +71,40 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
+    private fun setupPersianLocale() {
+        val faIr = Locale("fa", "IR")
+        var res = tts?.setLanguage(faIr)
+        if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
+            val fa = Locale("fa")
+            res = tts?.setLanguage(fa)
+            if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
+                val ar = Locale("ar")
+                tts?.setLanguage(ar)
+            }
+        }
+    }
+
     fun speak(text: String) {
         if (!_isInitialized.value || tts == null) {
             Log.w(TAG, "TextToSpeech is not ready yet")
             return
         }
 
-        // Clean markdown and formatting symbols from text before reading out loud
+        // Clean emojis, markdown symbols, and formatting before speech synthesis
         val cleanText = text
-            .replace(Regex("[#*`_~>\\[\\]()]"), "")
-            .replace(Regex("[\n\r]+"), " ")
+            .replace(Regex("[\\x{1F600}-\\x{1F64F}\\x{1F300}-\\x{1F5FF}\\x{1F680}-\\x{1F6FF}\\x{1F700}-\\x{1F77F}\\x{1F780}-\\x{1F7FF}\\x{1F800}-\\x{1F8FF}\\x{1F900}-\\x{1F9FF}\\x{1FA00}-\\x{1FA6F}\\x{2600}-\\x{26FF}\\x{2700}-\\x{27BF}]"), "")
+            .replace(Regex("[#*`_~>\\[\\]()|\\\\:-]"), " ")
+            .replace(Regex("[\\r\\n]+"), " ")
+            .replace(Regex("\\s+"), " ")
             .trim()
 
         if (cleanText.isEmpty()) return
 
         stop()
 
-        // Detect if text contains Persian / Arabic script range (\u0600-\u06FF)
-        val hasPersianChars = cleanText.contains(Regex("[\u0600-\u06FF]"))
+        val hasPersianChars = cleanText.contains(Regex("[\\u0600-\\u06FF]"))
         if (hasPersianChars) {
-            val persianLocale = Locale("fa", "IR")
-            val res = tts?.setLanguage(persianLocale)
-            if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
-                tts?.setLanguage(Locale("fa"))
-            }
+            setupPersianLocale()
         } else {
             tts?.setLanguage(Locale.ENGLISH)
         }
