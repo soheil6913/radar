@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.ScanRecord
+import com.example.data.OfflinePersianKnowledgeBase
+import com.example.data.PersianAnomalyKnowledge
 import com.example.hardware.ConnectionMode
 import com.example.hardware.SensorType
 import com.example.ui.theme.*
@@ -4704,6 +4706,10 @@ fun AiAnalysisScreen(viewModel: VisualizerViewModel) {
     val activeScanData by viewModel.activeScanData.collectAsStateWithLifecycle()
 
     var userQuery by remember { mutableStateOf("") }
+    var selectedAiTab by remember { mutableStateOf("ai_online") } // "ai_online" or "offline_db"
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategoryFilter by remember { mutableStateOf("همه") }
+
     val chatScrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
@@ -4725,7 +4731,7 @@ fun AiAnalysisScreen(viewModel: VisualizerViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -4736,7 +4742,7 @@ fun AiAnalysisScreen(viewModel: VisualizerViewModel) {
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(44.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(CyberGold.copy(alpha = 0.15f))
                             .border(1.dp, CyberGold, RoundedCornerShape(12.dp)),
@@ -4751,13 +4757,13 @@ fun AiAnalysisScreen(viewModel: VisualizerViewModel) {
                     }
                     Column {
                         Text(
-                            text = "تحلیلگر هوشمند تاکتیکال (AI Copilot)",
+                            text = "تحلیلگر هوشمند و بانک دانش (Persian AI & DB)",
                             color = Color.White,
-                            fontSize = 17.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "پردازش سه‌بعدی و طبقه‌بندی هوشمند آنومالی‌های ژئوفیزیک با هسته Gemini",
+                            text = "موتور پردازش سه‌بعدی و پخش صوتی فارسی آنومالی‌ها",
                             color = GrayText,
                             fontSize = 10.sp
                         )
@@ -4772,7 +4778,7 @@ fun AiAnalysisScreen(viewModel: VisualizerViewModel) {
                         } else {
                             val textToRead = chatMessages.lastOrNull { !it.isUser }?.text
                                 ?: aiAnalysisResult
-                                ?: "تحلیلی برای پخش صوتی وجود ندارد. ابتدا بر روی پردازش هوش مصنوعی کلیک کنید."
+                                ?: "تحلیلی برای پخش صوتی وجود ندارد. لطفاً یکی از قابلیت‌های هوش مصنوعی یا بانک دانش افلاین را انتخاب کنید."
                             viewModel.speakText(textToRead)
                         }
                     },
@@ -4795,7 +4801,256 @@ fun AiAnalysisScreen(viewModel: VisualizerViewModel) {
                 }
             }
 
-            // Current Target Quick Info Panel
+            // Mode Selector Segmented Tabs
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+                    .background(SurfaceBg, RoundedCornerShape(12.dp))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Card(
+                    onClick = { selectedAiTab = "ai_online" },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (selectedAiTab == "ai_online") CyberGold else Color.Transparent
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "🤖 تحلیل هوش مصنوعی",
+                            color = if (selectedAiTab == "ai_online") Color.Black else Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Card(
+                    onClick = { selectedAiTab = "offline_db" },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (selectedAiTab == "offline_db") CyberCyan else Color.Transparent
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "📚 بانک دانش افلاین (پخش صوتی 🔊)",
+                            color = if (selectedAiTab == "offline_db") Color.Black else Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            if (selectedAiTab == "offline_db") {
+                // OFFLINE PERSIAN KNOWLEDGE BASE SCREEN WITH VOICE PLAYBACK
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Search Bar
+                    TextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("جستجو در دانش افلاین فارسی (طلا، حفره، عمق...)", color = GrayText, fontSize = 11.sp) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = CyberCyan) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
+                                }
+                            }
+                        },
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = SurfaceBg,
+                            unfocusedContainerColor = SurfaceBg,
+                            focusedIndicatorColor = CyberCyan,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .border(1.dp, CardBg, RoundedCornerShape(12.dp)),
+                        textStyle = TextStyle(fontSize = 11.sp),
+                        singleLine = true
+                    )
+
+                    // Category Filter Chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val categories = listOf("همه", "فلزات", "حفره‌ها", "کالیبراسیون", "سازه‌ها")
+                        categories.forEach { cat ->
+                            val selected = selectedCategoryFilter == cat
+                            FilterChip(
+                                selected = selected,
+                                onClick = { selectedCategoryFilter = cat },
+                                label = { Text(cat, fontSize = 10.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = CyberCyan.copy(alpha = 0.2f),
+                                    selectedLabelColor = CyberCyan,
+                                    containerColor = CardBg,
+                                    labelColor = Color.White
+                                )
+                            )
+                        }
+                    }
+
+                    // Knowledge Base List
+                    val filteredList = remember(searchQuery, selectedCategoryFilter) {
+                        var list = OfflinePersianKnowledgeBase.search(searchQuery)
+                        if (selectedCategoryFilter != "همه") {
+                            list = list.filter { it.category == selectedCategoryFilter }
+                        }
+                        list
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(filteredList, key = { it.id }) { entry ->
+                            val isSpeakingThis = isTtsSpeaking && ttsSpeakingText == entry.voiceSpeechScript
+
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = SurfaceBg),
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSpeakingThis) CyberGold else CardBg
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = entry.title,
+                                            color = CyberGold,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(CyberCyan.copy(alpha = 0.15f))
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "دقت: ${entry.confidence}",
+                                                color = CyberCyan,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+
+                                    Text(
+                                        text = entry.description,
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        lineHeight = 17.sp
+                                    )
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(CardBg, RoundedCornerShape(8.dp))
+                                            .padding(8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("محدوده فاز:", color = GrayText, fontSize = 9.sp)
+                                            Text(entry.phaseRange, color = CyberCyan, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("رفتار فرکانس:", color = GrayText, fontSize = 9.sp)
+                                            Text(entry.adcBehavior, color = CyberGold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Text("📏 فرمول تخمین عمق:", color = CyberGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Text(entry.depthFormula, color = Color.White.copy(alpha = 0.9f), fontSize = 10.sp)
+                                    }
+
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Text("⚡ توصیه تاکتیکال:", color = CyberCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Text(entry.tacticalAdvice, color = Color.White.copy(alpha = 0.9f), fontSize = 10.sp)
+                                    }
+
+                                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+                                    // Voice Audio Playback Button for Persian TTS
+                                    Button(
+                                        onClick = {
+                                            if (isSpeakingThis) {
+                                                viewModel.stopSpeech()
+                                            } else {
+                                                viewModel.speakText(entry.voiceSpeechScript)
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (isSpeakingThis) Color.Red.copy(alpha = 0.8f) else CyberGold,
+                                            contentColor = if (isSpeakingThis) Color.White else Color.Black
+                                        ),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isSpeakingThis) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isSpeakingThis) "توقف پخش صوتی" else "پخش صوتی راهنما به زبان فارسی 🔊",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    // Current Target Quick Info Panel
             Card(
                 colors = CardDefaults.cardColors(containerColor = SurfaceBg),
                 shape = RoundedCornerShape(14.dp),
@@ -5195,6 +5450,8 @@ fun AiAnalysisScreen(viewModel: VisualizerViewModel) {
             }
         }
     }
+}
+}
 }
 
 @Composable

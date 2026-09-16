@@ -71,17 +71,39 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
-    private fun setupPersianLocale() {
+    private fun setupPersianLocale(): Boolean {
         val faIr = Locale("fa", "IR")
         var res = tts?.setLanguage(faIr)
-        if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
-            val fa = Locale("fa")
-            res = tts?.setLanguage(fa)
-            if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
-                val ar = Locale("ar")
-                tts?.setLanguage(ar)
-            }
+        if (res == TextToSpeech.LANG_AVAILABLE || res == TextToSpeech.LANG_COUNTRY_AVAILABLE) {
+            tts?.setPitch(1.0f)
+            return true
         }
+
+        val fa = Locale("fa")
+        res = tts?.setLanguage(fa)
+        if (res == TextToSpeech.LANG_AVAILABLE || res == TextToSpeech.LANG_COUNTRY_AVAILABLE) {
+            tts?.setPitch(1.0f)
+            return true
+        }
+
+        val fas = Locale("fas")
+        res = tts?.setLanguage(fas)
+        if (res == TextToSpeech.LANG_AVAILABLE || res == TextToSpeech.LANG_COUNTRY_AVAILABLE) {
+            tts?.setPitch(1.0f)
+            return true
+        }
+
+        val per = Locale("per")
+        res = tts?.setLanguage(per)
+        if (res == TextToSpeech.LANG_AVAILABLE || res == TextToSpeech.LANG_COUNTRY_AVAILABLE) {
+            tts?.setPitch(1.0f)
+            return true
+        }
+
+        // CRITICAL: NEVER fallback to Arabic (ar). If Persian is unavailable on system TTS,
+        // use default locale without switching to Arabic accent.
+        Log.w(TAG, "Persian TTS language pack not installed on Android System. Playing with standard voice.")
+        return false
     }
 
     fun speak(text: String) {
