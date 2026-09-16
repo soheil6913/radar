@@ -2,9 +2,9 @@ name: Build Gold Radar X20 APK
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
   workflow_dispatch:
 
 jobs:
@@ -16,11 +16,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.9'
 
       - name: Decode Keystore from Secret
         env:
@@ -28,20 +32,28 @@ jobs:
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 --decode > release.jks
-            echo "Keystore successfully decoded from secrets."
+            echo "Keystore successfully decoded."
+          elif [ -f "release.jks" ]; then
+            echo "Using release.jks from repository."
           else
-            echo "KEYSTORE_BASE64 secret not set; utilizing repository release.jks file."
+            echo "ERROR: No release keystore found."
+            exit 1
           fi
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
 
       - name: Build Release APK
         env:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || '123456' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || '123456' }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'release' }}
-        run: ./gradlew assembleRelease --stacktrace
+        run: |
+          gradle assembleRelease --stacktrace --no-daemon
+
+      - name: Verify APK
+        run: |
+          echo "Checking generated APK..."
+          find app/build/outputs/apk/release -name "*.apk" -type f -print
+          test -n "$(find app/build/outputs/apk/release -name '*.apk' -type f -print -quit)"
+          echo "APK successfully generated."
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
