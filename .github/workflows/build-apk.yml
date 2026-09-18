@@ -46,7 +46,8 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || '123456' }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'release' }}
         run: |
-          gradle assembleRelease --stacktrace --no-daemon
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --stacktrace --no-daemon
 
       - name: Verify APK
         run: |
