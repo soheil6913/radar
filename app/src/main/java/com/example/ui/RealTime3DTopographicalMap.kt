@@ -88,6 +88,27 @@ fun RealTime3DTopographicalMap(
     var selectedNodeIndex by remember { mutableStateOf<Int?>(null) }
     var showExportMenu by remember { mutableStateOf(false) }
 
+    // Target pulse animation for detected objects
+    val infiniteTransition = rememberInfiniteTransition(label = "TargetGlowPulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.65f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "TargetPulseScale"
+    )
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 0.22f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "TargetPulseAlpha"
+    )
+
     // Auto-rotation loop
     LaunchedEffect(autoRotate) {
         if (autoRotate) {
@@ -406,7 +427,7 @@ fun RealTime3DTopographicalMap(
                             val rawVal = displayBuffer.getOrElse(idx) { 0f }
                             val normVal = rawVal / maxElevation
 
-                            val oz = if (renderStyle == "Heatmap") 0f else (normVal * 0.45f * zScale)
+                            val oz = (normVal * 0.45f * zScale)
 
                             // Rotate Yaw (Y axis)
                             val x1 = ox * cosY - oz * sinY
@@ -536,7 +557,44 @@ fun RealTime3DTopographicalMap(
                         )
                     }
 
-                    // 5. Draw Active Pulse Sweep Marker (Current Ingestion Cell)
+                    // 5. Draw Subtle Glowing Pulse Animation on Detected Targets & Anomalies
+                    projectedPoints.forEachIndexed { idx, pt ->
+                        val rawVal = displayBuffer.getOrElse(idx) { 0f }
+                        val isSelected = selectedNodeIndex == idx
+                        val normVal = if (maxElevation > 0f) rawVal / maxElevation else 0f
+                        val isDetectedTarget = abs(normVal) >= 0.35f || isSelected
+
+                        if (isDetectedTarget) {
+                            val targetColor = if (rawVal > 0f) CyberGold else CyberCyan
+                            val baseGlowColor = if (isSelected) Color.White else targetColor
+
+                            // 1. Outer expanding glowing aura
+                            val auraRadius = (12f * pulseScale) + (if (isSelected) 6f else 0f)
+                            drawCircle(
+                                color = baseGlowColor.copy(alpha = 0.22f * pulseAlpha),
+                                radius = auraRadius,
+                                center = Offset(pt.x, pt.y)
+                            )
+
+                            // 2. Subtle glowing pulsing ring
+                            val ringRadius = (7.5f * pulseScale) + (if (isSelected) 3f else 0f)
+                            drawCircle(
+                                color = baseGlowColor.copy(alpha = pulseAlpha),
+                                radius = ringRadius,
+                                center = Offset(pt.x, pt.y),
+                                style = Stroke(width = if (isSelected) 2.2f else 1.5f)
+                            )
+
+                            // 3. Focal core
+                            drawCircle(
+                                color = baseGlowColor,
+                                radius = if (isSelected) 6f else 3.8f,
+                                center = Offset(pt.x, pt.y)
+                            )
+                        }
+                    }
+
+                    // 6. Draw Active Pulse Sweep Marker (Current Ingestion Cell)
                     val activePt = projectedPoints.getOrNull(currentInsertIdx)
                     if (activePt != null) {
                         drawCircle(
@@ -550,24 +608,6 @@ fun RealTime3DTopographicalMap(
                             center = Offset(activePt.x, activePt.y),
                             style = Stroke(width = 2f)
                         )
-                    }
-
-                    // 6. Highlight Selected Node
-                    if (selectedNodeIndex != null) {
-                        val pt = projectedPoints.getOrNull(selectedNodeIndex!!)
-                        if (pt != null) {
-                            drawCircle(
-                                color = Color.White,
-                                radius = 7f,
-                                center = Offset(pt.x, pt.y)
-                            )
-                            drawCircle(
-                                color = CyberGold,
-                                radius = 15f,
-                                center = Offset(pt.x, pt.y),
-                                style = Stroke(width = 2f)
-                            )
-                        }
                     }
 
                     // 7. Draw 3D Orientation Axis Compass Widget

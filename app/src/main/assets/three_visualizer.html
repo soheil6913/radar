@@ -358,6 +358,7 @@
         let zScaleMultiplier = 1.0;
         let nodesGroup, wireframeMesh, terrainMesh, laserPlane;
         let selectedNodeMesh = null, reticleMesh = null;
+        let targetPulseMeshes = [];
         let raycaster, mouse;
         let isInitialized = false;
 
@@ -393,7 +394,15 @@
             compassCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 10);
             compassCamera.position.set(0, 0, 4);
 
-            compassRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            try {
+                compassRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, failIfMajorPerformanceCaveat: false });
+            } catch(e) {
+                console.warn("Compass WebGL error:", e);
+                compassRenderer = new THREE.WebGLRenderer({ alpha: true });
+            }
+            if (compassRenderer && compassRenderer.domElement) {
+                compassRenderer.domElement.addEventListener("webglcontextlost", function(e) { e.preventDefault(); }, false);
+            }
             compassRenderer.setSize(width, height);
             compassRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             container.appendChild(compassRenderer.domElement);
@@ -541,12 +550,7 @@
                 label.style.color = style === "Wireframe" ? "#60A5FA" : "#9E9E9E";
             }
 
-            // Snap camera top-down for Heatmap mode
-            if (style === "Heatmap" && camera && controls) {
-                camera.position.set(0, 20, 0.01); // Look straight down
-                controls.target.set(0, 0, 0);
-                controls.update();
-            } else if (style === "Solid" && camera && controls) {
+            if (style === "Solid" && camera && controls) {
                 camera.position.set(12, 14, 16); // Nice isometric 3D angle
                 controls.target.set(0, 0, 0);
                 controls.update();
@@ -695,8 +699,22 @@
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(12, 14, 16);
 
-            // 3. Renderer
-            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            // 3. Renderer with WebGL context resilience
+            try {
+                renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "default", failIfMajorPerformanceCaveat: false });
+            } catch (e) {
+                console.warn("High performance WebGL failed, falling back", e);
+                renderer = new THREE.WebGLRenderer({ antialias: false });
+            }
+            if (renderer && renderer.domElement) {
+                renderer.domElement.addEventListener("webglcontextlost", function(e) {
+                    e.preventDefault();
+                    console.warn("WebGL Context lost. Preventing crash...");
+                }, false);
+                renderer.domElement.addEventListener("webglcontextrestored", function(e) {
+                    console.log("WebGL Context restored.");
+                }, false);
+            }
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.shadowMap.enabled = true;
@@ -778,6 +796,19 @@
                 reticleMesh.rotation.z += 0.01;
             }
 
+            // Animate glowing pulse on detected target objects
+            if (targetPulseMeshes && targetPulseMeshes.length > 0) {
+                const pTime = Date.now() * 0.003;
+                const pScale = 1.0 + Math.sin(pTime) * 0.35;
+                const pOpacity = 0.35 + Math.sin(pTime) * 0.28;
+                targetPulseMeshes.forEach(mesh => {
+                    mesh.scale.set(pScale, pScale, pScale);
+                    if (mesh.material) {
+                        mesh.material.opacity = pOpacity;
+                    }
+                });
+            }
+
             if (renderer && scene && camera) {
                 renderer.render(scene, camera);
             }
@@ -822,6 +853,7 @@
             if (reticleMesh) scene.remove(reticleMesh);
             
             selectedNodeMesh = null;
+            targetPulseMeshes = [];
             document.getElementById('hud-node').style.display = 'none';
 
             nodesGroup = new THREE.Group();
@@ -832,6 +864,8 @@
             if (gridWidth <= 0 || gridLength <= 0 || activeData.length === 0) {
                 return;
             }
+
+            const maxAbsVal = activeData.reduce((m, v) => Math.max(m, Math.abs(v)), 1.0);
 
             // Grid scaling
             const spacingX = 2.0;
@@ -859,11 +893,31 @@
                     const value = activeData[idx];
                     const px = startX + x * spacingX;
                     const pz = startZ + z * spacingZ;
-                    const py = (currentRenderStyle === "Heatmap") ? 0 : (value * heightScale); // Height is 0 in Heatmap mode
+                    const py = value * heightScale;
 
                     // Node classification colors using dynamic palette selection
                     let nodeColor = getColorForValue(value, currentPalette);
                     let nodeGlowColor = nodeColor;
+
+                    // Check if node is a detected target object (high metal peak or cavity drop)
+                    const absVal = Math.abs(value);
+                    const isDetectedTarget = (maxAbsVal > 0 && absVal / maxAbsVal >= 0.35);
+
+                    if (isDetectedTarget) {
+                        const pulseRingGeo = new THREE.RingGeometry(0.32, 0.52, 24);
+                        const pulseRingMat = new THREE.MeshBasicMaterial({
+                            color: nodeColor,
+                            side: THREE.DoubleSide,
+                            transparent: true,
+                            opacity: 0.6,
+                            depthWrite: false
+                        });
+                        const pulseMesh = new THREE.Mesh(pulseRingGeo, pulseRingMat);
+                        pulseMesh.position.set(px, py + 0.05, pz);
+                        pulseMesh.rotation.x = Math.PI / 2;
+                        nodesGroup.add(pulseMesh);
+                        targetPulseMeshes.push(pulseMesh);
+                    }
 
                     // Create Vertical holographic connecting cylinder/pillar (Skip in Heatmap mode)
                     if (currentRenderStyle !== "Heatmap") {
@@ -942,7 +996,7 @@
                     value = activeData[idx];
                 }
 
-                const py = (currentRenderStyle === "Heatmap") ? 0 : (value * heightScale);
+                const py = value * heightScale;
                 posAttr.setY(i, py);
 
                 // Determine node color for vertex coloring using dynamic palette selection
@@ -1098,7 +1152,7 @@
                 const val = activeData[idx] || 0;
                 const px = startX + x * spacingX;
                 const pz = startZ + z * spacingZ;
-                const py = (currentRenderStyle === "Heatmap") ? 0 : (val * heightScale);
+                const py = val * heightScale;
 
                 let colorHex = marker.colorHex || "#FFD700";
                 if (colorHex.startsWith('#')) colorHex = colorHex.substring(1);

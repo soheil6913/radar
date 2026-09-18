@@ -1379,7 +1379,7 @@ fun VisualizerScreen(viewModel: VisualizerViewModel, onNavigateToAi: () -> Unit 
     var showSaveDialog by remember { mutableStateOf(false) }
     var scanSaveName by remember { mutableStateOf("") }
     var scanSaveNotes by remember { mutableStateOf("") }
-    var renderEngine by remember { mutableStateOf("ThreeJS") } // "ThreeJS", "D3JS", "Native", "Plan2D"
+    var renderEngine by remember { mutableStateOf("Native") } // "Native", "ThreeJS", "D3JS", "Plan2D"
     var showExportMenu by remember { mutableStateOf(false) }
     var showPresetMenu by remember { mutableStateOf(false) }
 
@@ -1502,9 +1502,9 @@ fun VisualizerScreen(viewModel: VisualizerViewModel, onNavigateToAi: () -> Unit 
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val engines = listOf(
+                        "Native" to "سه‌بعدی بومی (Native 3D)",
                         "ThreeJS" to "WebGL 3D",
                         "D3JS" to "D3.js",
-                        "Native" to "بومی Canvas",
                         "Plan2D" to "۲D Plan"
                     )
                     engines.forEach { (id, label) ->
@@ -4095,6 +4095,7 @@ fun ThreeDWebViewVisualizer(
     AndroidView(
         factory = { ctx ->
             WebView(ctx).apply {
+                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
@@ -4121,6 +4122,13 @@ fun ThreeDWebViewVisualizer(
                         selectedNodeIndex?.let {
                             view?.evaluateJavascript("selectNodeNatively($it)", null)
                         }
+                    }
+
+                    override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                        view?.post {
+                            view.loadUrl("file:///android_asset/three_visualizer.html")
+                        }
+                        return true
                     }
                 }
 
@@ -4248,6 +4256,7 @@ fun D3WebViewVisualizer(
     AndroidView(
         factory = { ctx ->
             WebView(ctx).apply {
+                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
@@ -4273,6 +4282,13 @@ fun D3WebViewVisualizer(
                         selectedNodeIndex?.let {
                             view?.evaluateJavascript("selectNodeNatively($it)", null)
                         }
+                    }
+
+                    override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                        view?.post {
+                            view.loadUrl("file:///android_asset/d3_topography.html")
+                        }
+                        return true
                     }
                 }
 

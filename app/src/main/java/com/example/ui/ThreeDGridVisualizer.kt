@@ -1,5 +1,11 @@
 package com.example.ui
  
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -98,6 +104,27 @@ fun ThreeDGridVisualizer(
     val minDataVal = remember(gridData) { gridData.minOrNull() ?: 0f }
     val maxDataVal = remember(gridData) { gridData.maxOrNull() ?: 1f }
 
+    // Target pulse animation for detected objects
+    val infiniteTransition = rememberInfiniteTransition(label = "TargetGlowPulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.65f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "TargetPulseScale"
+    )
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 0.22f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "TargetPulseAlpha"
+    )
+
     // Geometry calculations
     Box(
         modifier = modifier
@@ -139,7 +166,7 @@ fun ThreeDGridVisualizer(
                             val rawVal = gridData.getOrNull(idx) ?: 0f
                             val normVal = rawVal / maxVal
                             
-                            val oz = if (renderStyle == "Heatmap") 0f else (normVal * 0.45f * zScale)
+                            val oz = (normVal * 0.45f * zScale)
 
                             val x1 = ox * cosY - oz * sinY
                             val z1 = ox * sinY + oz * cosY
@@ -203,7 +230,7 @@ fun ThreeDGridVisualizer(
                     val normVal = rawVal / maxVal
                     
                     // Z height scaled by normalized value and height multiplier
-                    val oz = if (renderStyle == "Heatmap") 0f else (normVal * 0.45f * zScale)
+                    val oz = (normVal * 0.45f * zScale)
 
                     // Rotate around Z/Y (Yaw)
                     // We rotate X and Z around Y axis
@@ -228,8 +255,8 @@ fun ThreeDGridVisualizer(
                 }
             }
 
-            // Draw Bounding Wire Box / Reference Cage (Professional Geophysics Outline) (Skip in Heatmap mode)
-            if (renderStyle != "Heatmap") {
+            // Draw Bounding Wire Box / Reference Cage (Professional Geophysics Outline)
+            run {
                 val cageX = listOf(-1.1f, 1.1f)
                 val cageY = listOf(-1.1f, 1.1f)
                 val cageZ = listOf(-0.2f * zScale, 0.5f * zScale)
@@ -382,6 +409,61 @@ fun ThreeDGridVisualizer(
                 }
             }
 
+            // Draw subtle glowing pulse animation on all detected target objects & selected nodes
+            projectedPoints.forEachIndexed { idx, pt ->
+                val rawH = gridData.getOrNull(idx) ?: 0f
+                val normH = if (colorAutoScale) {
+                    val range = maxDataVal - minDataVal
+                    val fraction = if (range > 0f) (rawH - minDataVal) / range else 0.5f
+                    fraction * 2f - 1f
+                } else {
+                    rawH / maxVal
+                }
+
+                val isSelected = selectedNodeIndex == idx
+                val isDetectedTarget = abs(normH) >= 0.35f || isSelected
+
+                if (isDetectedTarget) {
+                    val nodeDepth = calculateNodeDepth(rawH, maxVal)
+                    val isInActiveLayer = when (selectedDepthLayer) {
+                        "Surface" -> nodeDepth in 0f..3.5f
+                        "Subsurface" -> nodeDepth in 3.5f..8.0f
+                        "Deep" -> nodeDepth in 8.0f..14.0f
+                        "Bedrock" -> nodeDepth in 14.0f..20.0f
+                        else -> true
+                    }
+                    if (isInActiveLayer) {
+                        val layerAlphaFactor = 1.0f
+                        val targetColor = if (normH > 0f) CyberGold else CyberCyan
+                        val baseGlowColor = if (isSelected) Color.White else targetColor
+
+                        // 1. Outer expanding glowing aura
+                        val auraRadius = (12f * pulseScale) + (if (isSelected) 6f else 0f)
+                        drawCircle(
+                            color = baseGlowColor.copy(alpha = 0.22f * pulseAlpha * layerAlphaFactor),
+                            radius = auraRadius,
+                            center = Offset(pt.x, pt.y)
+                        )
+
+                        // 2. Subtle glowing pulsing target ring
+                        val ringRadius = (7.5f * pulseScale) + (if (isSelected) 3f else 0f)
+                        drawCircle(
+                            color = baseGlowColor.copy(alpha = pulseAlpha * layerAlphaFactor),
+                            radius = ringRadius,
+                            center = Offset(pt.x, pt.y),
+                            style = Stroke(width = if (isSelected) 2.2f else 1.5f)
+                        )
+
+                        // 3. Central focal dot
+                        drawCircle(
+                            color = baseGlowColor.copy(alpha = layerAlphaFactor),
+                            radius = if (isSelected) 6f else 3.8f,
+                            center = Offset(pt.x, pt.y)
+                        )
+                    }
+                }
+            }
+
             // Draw individual point nodes if "Points" style selected
             if (renderStyle == "Points") {
                 projectedPoints.forEachIndexed { idx, pt ->
@@ -394,7 +476,7 @@ fun ThreeDGridVisualizer(
                         rawH / maxVal
                     }
                     val dotColor = getTargetColor(normH, colorThreshold, isRgbAnalysis, colorPalette)
-                    
+
                     val nodeDepth = calculateNodeDepth(rawH, maxVal)
                     val isInActiveLayer = when (selectedDepthLayer) {
                         "Surface" -> nodeDepth in 0f..3.5f
@@ -403,54 +485,16 @@ fun ThreeDGridVisualizer(
                         "Bedrock" -> nodeDepth in 14.0f..20.0f
                         else -> true
                     }
-                    
+
                     val layerAlphaFactor = if (isInActiveLayer) 1.0f else 0.12f
-                    
-                    // Highlight selected point
                     val isSelected = selectedNodeIndex == idx
                     val radius = if (isSelected) 8f else 4.5f
                     val glowCol = (if (isSelected) Color.White else dotColor).copy(alpha = layerAlphaFactor)
-                    
+
                     drawCircle(
                         color = glowCol,
                         radius = radius,
                         center = Offset(pt.x, pt.y)
-                    )
-                    
-                    if (isSelected && isInActiveLayer) {
-                        drawCircle(
-                            color = CyberGold,
-                            radius = 14f,
-                            center = Offset(pt.x, pt.y),
-                            style = Stroke(width = 1.5f)
-                        )
-                    }
-                }
-            } else if (selectedNodeIndex != null) {
-                // Highlight the selected node on top of Solid or Wireframe mesh
-                val pt = projectedPoints.getOrNull(selectedNodeIndex)
-                if (pt != null) {
-                    val rawH = gridData.getOrNull(selectedNodeIndex) ?: 0f
-                    val nodeDepth = calculateNodeDepth(rawH, maxVal)
-                    val isInActiveLayer = when (selectedDepthLayer) {
-                        "Surface" -> nodeDepth in 0f..3.5f
-                        "Subsurface" -> nodeDepth in 3.5f..8.0f
-                        "Deep" -> nodeDepth in 8.0f..14.0f
-                        "Bedrock" -> nodeDepth in 14.0f..20.0f
-                        else -> true
-                    }
-                    val layerAlphaFactor = if (isInActiveLayer) 1.0f else 0.25f
-                    
-                    drawCircle(
-                        color = Color.White.copy(alpha = layerAlphaFactor),
-                        radius = 7f,
-                        center = Offset(pt.x, pt.y)
-                    )
-                    drawCircle(
-                        color = CyberGold.copy(alpha = layerAlphaFactor),
-                        radius = 13f,
-                        center = Offset(pt.x, pt.y),
-                        style = Stroke(width = 1.8f)
                     )
                 }
             }
